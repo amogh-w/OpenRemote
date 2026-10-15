@@ -13,6 +13,7 @@ if-addrs = "0.13"
 png = "0.17"
 
 [target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["Foundation", "Media_Control", "Storage_Streams", "Win32_System_WinRT"] }
 arboard = { version = "3", default-features = false, features = ["image-data"] }
 tray-icon = { version = "0.21", default-features = false }
 windows-sys = { version = "0.59", features = [

@@ -34,6 +34,7 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 - `src/command.rs`: `Msg` (serde, tagged by `t`), `Injector` trait (platform backend, default no-op methods),
   `Dispatcher` (validation, clamping, replies), key-name table. Platform-independent and unit-tested.
 - `src/web.rs`: axum routes, WebSocket loop, manifest, `/icon/{file}`, loopback-only `/admin`.
+- `src/media.rs`: now-playing info and cover art via the WinRT media session API (`windows` crate; Windows only).
 - `src/input.rs`, `src/winapps.rs`: Windows `Injector` (SendInput, power, clipboard, windows, apps, icons).
   Non-Windows builds get a logging stub.
 - `src/image.rs`: PNG validation and RGBA conversion for clipboard images (limits live here).

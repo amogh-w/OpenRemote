@@ -33,6 +33,7 @@ pub fn router<I: Injector + 'static>(state: Arc<AppState<I>>) -> Router {
         .route("/admin", get(admin::<I>))
         .route("/manifest.webmanifest", get(manifest))
         .route("/icon/{file}", get(app_icon::<I>))
+        .route("/media/art", get(media_art::<I>))
         .route("/clip/image.png", get(clip_image_get::<I>))
         .route(
             "/clip/image",
@@ -51,6 +52,18 @@ pub async fn serve<I: Injector + 'static>(listener: TcpListener, state: Arc<AppS
 
 async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+/// Cover image of the track that is playing (PNG or JPEG, whatever the player supplied).
+async fn media_art<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>) -> Response {
+    let st2 = st.clone();
+    match tokio::task::spawn_blocking(move || st2.dispatcher.media_art()).await {
+        Ok(Some(bytes)) => {
+            let ctype = if bytes.starts_with(&[0xFF, 0xD8]) { "image/jpeg" } else { "image/png" };
+            ([(header::CONTENT_TYPE, ctype), (header::CACHE_CONTROL, "no-store")], bytes).into_response()
+        }
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// The image currently on the PC clipboard, as PNG. Read live, so it is always current.
@@ -157,7 +170,17 @@ async fn ws_handler<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, w
     ws.max_message_size(MAX_WS_MESSAGE).on_upgrade(move |s| socket_loop(s, st))
 }
 
-async fn socket_loop<I: Injector>(mut socket: WebSocket, st: Arc<AppState<I>>) {
+/// Handle one message. The media query talks to a Windows service and can take a moment, so it runs on a
+/// blocking thread instead of an async worker.
+async fn reply_for<I: Injector + 'static>(st: &Arc<AppState<I>>, msg: Msg) -> Option<serde_json::Value> {
+    if matches!(msg, Msg::MediaGet) {
+        let st2 = st.clone();
+        return tokio::task::spawn_blocking(move || st2.dispatcher.handle(&msg)).await.ok().flatten();
+    }
+    st.dispatcher.handle(&msg)
+}
+
+async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppState<I>>) {
     let hello = serde_json::json!({"t": "hello", "host": st.hostname, "v": env!("CARGO_PKG_VERSION")});
     if socket.send(Message::Text(hello.to_string().into())).await.is_err() {
         return;
@@ -171,7 +194,7 @@ async fn socket_loop<I: Injector>(mut socket: WebSocket, st: Arc<AppState<I>>) {
                     }
                 }
                 Ok(msg) => {
-                    if let Some(reply) = st.dispatcher.handle(&msg) {
+                    if let Some(reply) = reply_for(&st, msg).await {
                         if socket.send(Message::Text(reply.to_string().into())).await.is_err() {
                             break;
                         }

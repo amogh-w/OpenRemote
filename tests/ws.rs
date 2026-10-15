@@ -60,6 +60,13 @@ impl Injector for Handle {
     fn clip_image_png(&self) -> Option<Vec<u8>> {
         Some(b"PNG-from-pc".to_vec())
     }
+    fn media(&self) -> Option<openremote::command::MediaInfo> {
+        use openremote::command::{MediaInfo, MediaState};
+        Some(MediaInfo { state: MediaState::Paused, title: "Song".into(), artist: "Band".into(), app: "Player".into(), pos: 5, dur: 180, art: true })
+    }
+    fn media_art(&self) -> Option<Vec<u8>> {
+        Some(vec![0xFF, 0xD8, 1, 2, 3])
+    }
     fn clip_image_set(&self, png: &[u8]) -> bool {
         self.0 .0.lock().unwrap().push(format!("clipimg {}", png.len()));
         true
@@ -318,6 +325,21 @@ async fn image_download_serves_the_pc_clipboard() {
     let r = http_get(port, "/clip/image.png").await;
     assert!(r.starts_with("HTTP/1.1 200") && r.to_lowercase().contains("content-type: image/png"), "{r}");
     assert!(r.to_lowercase().contains("cache-control: no-store") && r.contains("PNG-from-pc"));
+}
+
+#[tokio::test]
+async fn now_playing_and_cover_art() {
+    let (port, _) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
+    ws.next().await.unwrap().unwrap(); // hello
+    ws.send(Message::Text(r#"{"t":"media.get"}"#.into())).await.unwrap();
+    let m: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(
+        m,
+        serde_json::json!({"t": "media", "state": "paused", "title": "Song", "artist": "Band", "app": "Player", "pos": 5, "dur": 180, "art": true})
+    );
+    let art = http_get(port, "/media/art").await;
+    assert!(art.starts_with("HTTP/1.1 200") && art.to_lowercase().contains("content-type: image/jpeg"), "{}", &art[..60.min(art.len())]);
 }
 
 #[tokio::test]

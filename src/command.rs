@@ -113,7 +113,31 @@ pub enum Msg {
     AppList,
     #[serde(rename = "app.launch")]
     AppLaunch { id: String },
+    /// Ask what is playing; answered with `{"t":"media",...}` (see [`MediaInfo`]).
+    #[serde(rename = "media.get")]
+    MediaGet,
     Ping,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MediaState {
+    Playing,
+    Paused,
+    Stopped,
+}
+
+/// What the system media session reports (title, artist, position in seconds, ...).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct MediaInfo {
+    pub state: MediaState,
+    pub title: String,
+    pub artist: String,
+    pub app: String,
+    pub pos: u64,
+    pub dur: u64,
+    /// True when `GET /media/art` can return a cover image.
+    pub art: bool,
 }
 
 /// Platform input backend. The Windows implementation lives in `input.rs`.
@@ -146,6 +170,14 @@ pub trait Injector: Send + Sync {
     /// Put a (validated) PNG on the clipboard as an image.
     fn clip_image_set(&self, _png: &[u8]) -> bool {
         false
+    }
+    /// The current media session, or `None` when nothing is playing.
+    fn media(&self) -> Option<MediaInfo> {
+        None
+    }
+    /// Cover image (PNG or JPEG bytes) of the current track.
+    fn media_art(&self) -> Option<Vec<u8>> {
+        None
     }
     fn windows(&self) -> Vec<WindowInfo> {
         Vec::new()
@@ -187,6 +219,16 @@ impl<I: Injector> Dispatcher<I> {
                 let ok = text.len() <= MAX_CLIP_BYTES && self.inj.clip_set(text);
                 return Some(serde_json::json!({"t": "clip.ack", "ok": ok}));
             }
+            Msg::MediaGet => {
+                return Some(match self.inj.media() {
+                    Some(m) => {
+                        let mut v = serde_json::to_value(m).unwrap_or_default();
+                        v["t"] = "media".into();
+                        v
+                    }
+                    None => serde_json::json!({"t": "media", "state": "none"}),
+                });
+            }
             Msg::WinList => return Some(serde_json::json!({"t": "win.list", "items": self.inj.windows()})),
             Msg::AppList => return Some(serde_json::json!({"t": "app.list", "items": self.inj.apps()})),
             _ => {}
@@ -226,9 +268,14 @@ impl<I: Injector> Dispatcher<I> {
                     self.inj.launch_app(id);
                 }
             }
-            Msg::ClipGet | Msg::ClipSet { .. } | Msg::WinList | Msg::AppList | Msg::Ping => {}
+            Msg::ClipGet | Msg::ClipSet { .. } | Msg::MediaGet | Msg::WinList | Msg::AppList | Msg::Ping => {}
         }
         None
+    }
+
+    /// The current track's cover (served at `GET /media/art`).
+    pub fn media_art(&self) -> Option<Vec<u8>> {
+        self.inj.media_art()
     }
 
     /// The clipboard image as PNG (served at `GET /clip/image.png`).
@@ -400,6 +447,12 @@ pub mod testing {
         fn clip_set(&self, t: &str) -> bool {
             self.0.lock().unwrap().push(format!("clip {t}"));
             t != "fail"
+        }
+        fn media(&self) -> Option<MediaInfo> {
+            Some(MediaInfo { state: MediaState::Playing, title: "Song".into(), artist: "Band".into(), app: "Player".into(), pos: 12, dur: 200, art: true })
+        }
+        fn media_art(&self) -> Option<Vec<u8>> {
+            Some(vec![0x89, b'P', b'N', b'G'])
         }
         fn clip_image_info(&self) -> Option<(u32, u32)> {
             Some((3, 2))

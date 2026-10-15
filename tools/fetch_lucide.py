@@ -22,7 +22,7 @@ ICONS = {
     # media
     "play": "play", "pause": "pause", "prev": "skip-back", "next": "skip-forward",
     "vol-up": "volume-2", "vol-down": "volume-1", "mute": "volume-x", "plus": "plus", "minus": "minus",
-    "fullscreen": "fullscreen", "presentation": "presentation",
+    "fullscreen": "fullscreen", "music": "music",
     # windows and apps
     "window": "app-window", "max": "maximize", "restore": "minimize-2", "x": "x", "search": "search",
     "refresh": "refresh-cw", "check": "check", "loader": "loader-circle",

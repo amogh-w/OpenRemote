@@ -101,7 +101,9 @@
         if (everOnline && wasLost) toast('Reconnected', { icon: 'wifi' });
         everOnline = true; wasLost = false; warned = false; appsRequested = false;
         if (page === 'apps') refreshApps();
+        askMedia();
       } else if (m.t === 'pong') { rtt = Math.round(performance.now() - pingAt); if (online) setConn('on'); }
+      else if (m.t === 'media') gotMedia(m);
       else if (m.t === 'clip') gotClip(m);
       else if (m.t === 'clip.ack') gotAck(m);
       else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; renderWins(); }
@@ -140,7 +142,7 @@
   // ============================================================ keys + sticky modifiers
   const mods = new Set();
   function paintMods() { $$('[data-mod]').forEach((b) => b.classList.toggle('on', mods.has(b.dataset.mod))); }
-  const sendKey = (k) => { send({ t: 'key', k: [...mods, k].join('+') }); if (mods.size) { mods.clear(); paintMods(); } };
+  const sendKey = (k) => { send({ t: 'key', k: [...mods, k].join('+') }); if (mods.size) { mods.clear(); paintMods(); } if (/^media_/.test(k)) setTimeout(askMedia, 400); };
   const typed = (s) => { if (mods.size && s.length === 1) sendKey(s.toLowerCase()); else send({ t: 'text', v: s }); };
   $$('[data-mod]').forEach((b) => { b.onclick = () => { const m = b.dataset.mod; mods.has(m) ? mods.delete(m) : mods.add(m); paintMods(); buzz(); }; });
   $$('[data-key]').forEach((b) => {
@@ -474,6 +476,39 @@
   setInterval(() => { if (page === 'apps' && appsMode === 'open' && online && !document.hidden) send({ t: 'win.list' }); }, 3000);
   renderWins();
 
+  // ============================================================ media: now playing
+  // While the Media page is open, ask the PC what is playing every 2 s; the progress bar advances locally in between.
+  let np = null, npAt = 0, npKey = '', npPoll = 0, npTick = 0;
+  const fmtT = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+  function askMedia() { if (online && page === 'media') send({ t: 'media.get' }); }
+  function startMedia() { stopMedia(); askMedia(); paintMedia(); npPoll = setInterval(askMedia, 2000); npTick = setInterval(paintMedia, 500); }
+  function stopMedia() { clearInterval(npPoll); clearInterval(npTick); }
+  function gotMedia(m) { np = m.state === 'none' ? null : m; npAt = performance.now(); paintMedia(); }
+  const npImg = $('#np-img');
+  npImg.onload = () => { npImg.hidden = false; };
+  npImg.onerror = () => { npImg.hidden = true; };
+  function paintMedia() {
+    const has = !!np && !!(np.title || np.artist);
+    const playing = has && np.state === 'playing';
+    $('#np-title').textContent = has ? np.title || 'Unknown title' : 'Nothing playing';
+    $('#np-artist').textContent = has ? np.artist || np.app : 'Start something on your PC';
+    $('#np-app').textContent = has && np.artist ? np.app : '';
+    $('#np').classList.toggle('idle', !has);
+    $('#pp use').setAttribute('href', playing ? '#i-pause' : '#i-play');
+    const key = has ? [np.title, np.artist, np.app, np.art].join('|') : '';
+    if (key !== npKey) {   // a new track: reload the cover
+      npKey = key; npImg.hidden = true;
+      if (has && np.art) npImg.src = '/media/art?v=' + Date.now(); else npImg.removeAttribute('src');
+    }
+    const show = has && np.dur > 0;
+    $('#np-prog').hidden = !show;
+    if (show) {
+      const pos = Math.min(np.dur, np.pos + (playing ? (performance.now() - npAt) / 1000 : 0));
+      $('#np-pos').textContent = fmtT(pos); $('#np-dur').textContent = fmtT(np.dur);
+      $('#np-fill').style.transform = 'scaleX(' + (pos / np.dur).toFixed(4) + ')';
+    }
+  }
+
   // ============================================================ browser / clipboard / power
   $('#urlform').onsubmit = (e) => {
     e.preventDefault();
@@ -643,6 +678,7 @@
     PAGES.forEach((p, i) => { const el = $('#pg-' + p); el.classList.toggle('on', p === name); el.style.setProperty('--off', i < idx ? '-28px' : i > idx ? '28px' : '0px'); });
     page = name; store.set('or_page', name); paintNav();
     if (name === 'apps') refreshApps();
+    if (name === 'media') startMedia(); else stopMedia();
   }
   $$('#nav [data-go]').forEach((b) => { b.onclick = () => { closeSheet(); go(b.dataset.go); buzz(); }; });
   $('#nav [data-more]').onclick = () => { sheetOpen ? closeSheet() : openSheet('more'); buzz(); };

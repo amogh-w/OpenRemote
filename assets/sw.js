@@ -1,6 +1,6 @@
 // Service worker: keeps the app shell available when the PC is briefly unreachable.
 // Only registered by the page in secure contexts (https or localhost); plain-HTTP LAN pages skip it.
-const CACHE = 'or-shell-v8';
+const CACHE = 'or-shell-v12';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/icon-192.png'])).then(() => self.skipWaiting()));

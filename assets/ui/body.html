@@ -87,27 +87,35 @@
 
     <!-- MEDIA -->
     <section class="page" id="pg-media" data-page="media">
-      <div class="dial">
-        <button class="d t" data-key="volume_up" data-repeat aria-label="Volume up"><svg class="i"><use href="#i-plus"/></svg></button>
-        <button class="d b" data-key="volume_down" data-repeat aria-label="Volume down"><svg class="i"><use href="#i-minus"/></svg></button>
-        <button class="d l" data-key="media_prev_track" aria-label="Previous track"><svg class="i"><use href="#i-prev"/></svg></button>
-        <button class="d r" data-key="media_next_track" aria-label="Next track"><svg class="i"><use href="#i-next"/></svg></button>
-        <button class="d c" data-key="media_play_pause" aria-label="Play or pause"><svg class="i"><use href="#i-play"/></svg></button>
-      </div>
-      <div class="pills">
-        <button class="pill" data-key="volume_mute"><svg class="i"><use href="#i-mute"/></svg>Mute</button>
-        <button class="pill" data-key="f11"><svg class="i"><use href="#i-fullscreen"/></svg>Fullscreen</button>
-        <button class="pill danger" data-key="alt+f4" data-confirm="Tap again to close"><svg class="i"><use href="#i-x"/></svg><span>Close window</span></button>
-      </div>
-      <div class="card pres">
-        <h4>Presentation</h4>
-        <div class="grid">
-          <button class="key" data-key="left" data-repeat><svg class="i"><use href="#i-arrow-left"/></svg>Prev</button>
-          <button class="key" data-key="f5"><svg class="i"><use href="#i-presentation"/></svg>Start</button>
-          <button class="key" data-key="esc"><svg class="i"><use href="#i-x"/></svg>Exit</button>
-          <button class="key" data-key="right" data-repeat><svg class="i"><use href="#i-arrow-right"/></svg>Next</button>
+      <div class="mcard" id="np">
+        <div class="np-top">
+          <div class="np-art"><svg class="i"><use href="#i-music"/></svg><img id="np-img" alt="" hidden></div>
+          <div class="np-meta">
+            <b id="np-title">Nothing playing</b>
+            <span id="np-artist">Start something on your PC</span>
+            <small id="np-app"></small>
+          </div>
+        </div>
+        <div class="np-prog" id="np-prog" hidden>
+          <span id="np-pos">0:00</span>
+          <div class="np-bar"><i id="np-fill"></i></div>
+          <span id="np-dur">0:00</span>
+        </div>
+        <div class="transport">
+          <button class="tbtn" data-key="media_prev_track" aria-label="Previous track"><svg class="i"><use href="#i-prev"/></svg></button>
+          <button class="tbtn big" id="pp" data-key="media_play_pause" aria-label="Play or pause"><svg class="i"><use href="#i-play"/></svg></button>
+          <button class="tbtn" data-key="media_next_track" aria-label="Next track"><svg class="i"><use href="#i-next"/></svg></button>
         </div>
       </div>
+      <div class="mcard">
+        <div class="mlabel">Volume</div>
+        <div class="volrow">
+          <button class="vbtn" data-key="volume_down" data-repeat aria-label="Volume down"><svg class="i"><use href="#i-vol-down"/></svg><span>Down</span></button>
+          <button class="vbtn" data-key="volume_mute" aria-label="Mute"><svg class="i"><use href="#i-mute"/></svg><span>Mute</span></button>
+          <button class="vbtn" data-key="volume_up" data-repeat aria-label="Volume up"><svg class="i"><use href="#i-vol-up"/></svg><span>Up</span></button>
+        </div>
+      </div>
+      <button class="btn ghost mfull" data-key="f11"><svg class="i sm"><use href="#i-fullscreen"/></svg>Toggle fullscreen</button>
     </section>
   </main>
 

@@ -11,7 +11,7 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **Touchpad** with tap to click, two-finger tap to right-click, two-finger scroll, tap-then-hold to drag, a scroll strip, and labeled Left / Mid / Right buttons that you can hold.
 - **Keyboard**: on-screen QWERTY with number row, symbols, shift and caps, key pop-ups and hold-to-repeat; sticky Ctrl/Alt/Shift/Win for shortcuts; or your phone's own keyboard (emoji, other languages, swipe typing).
 - **Special keys**: Fn row, numpad, navigation block, arrows.
-- **Media remote**: play/pause, next/previous, volume (hold to repeat), mute, fullscreen, and a presentation card for slides.
+- **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen.
 
 **Windows**
 - **App switcher**: live list of open windows with real icons; focus, minimize, maximize, restore or close each one. The active window is highlighted.
@@ -116,6 +116,7 @@ Settings live in `%APPDATA%\openremote\settings.json`.
 | `src/web.rs` | HTTP routes, WebSocket loop, manifest, icon route, loopback-only admin page |
 | `src/command.rs` | `Msg` types, `Injector` trait, `Dispatcher`, key-name table, URL and id validation |
 | `src/input.rs` | Windows `Injector`: `SendInput`, power, clipboard, open URL (stub on other OSes) |
+| `src/media.rs` | Now-playing info and cover art from the Windows system media session |
 | `src/winapps.rs` | Window enumeration and actions, Start Menu scan, icon extraction to PNG |
 | `src/shell.rs` | Tray icon and message loop, console attach, error dialog |
 | `src/image.rs` | PNG validation (dimensions before decoding), RGBA conversion for clipboard images |
@@ -143,6 +144,7 @@ JSON text frames on `GET /ws`.
 {"t":"open","url":"https://..."}            http(s) only, opened in the default browser
 {"t":"clip.set","text":"..."}               replace PC clipboard text (max 256 KB) -> {"t":"clip.ack","ok":true|false}
 {"t":"clip.get"}                            -> {"t":"clip","text":"...","image":{"w":..,"h":..}|null}
+{"t":"media.get"}                           -> {"t":"media","state":"playing|paused|stopped|none","title":"..","artist":"..","app":"..","pos":s,"dur":s,"art":bool}
 {"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,foreground}]}
 {"t":"win.act","id":123,"a":"focus|min|max|restore|close"}
 {"t":"app.list"}                            -> {"t":"app.list","items":[{id,name,icon}]}
@@ -155,6 +157,7 @@ The server greets with `{"t":"hello","host":...,"v":...}`. Unknown or malformed 
 Plain HTTP routes next to the socket:
 - `GET /icon/<key>.png`: window and app icons. Keys are issued by the server in `win.list` / `app.list`, so clients can only fetch or launch things the server itself found.
 - `GET /clip/image.png`: the PC clipboard image as a PNG.
+- `GET /media/art`: cover image of the track that is playing (PNG or JPEG), 404 when there is none.
 - `POST /clip/image`: put an uploaded PNG on the PC clipboard (`Content-Type: image/png`, up to 32 MB, at most 8192 px a side and 36 megapixels). The page converts photos to PNG on the phone first.
 
 ## Security

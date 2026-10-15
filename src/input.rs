@@ -124,6 +124,14 @@ mod win {
             clipboard(|c| c.set_text(text.to_owned())).is_some()
         }
 
+        fn media(&self) -> Option<crate::command::MediaInfo> {
+            crate::media::info()
+        }
+
+        fn media_art(&self) -> Option<Vec<u8>> {
+            crate::media::art()
+        }
+
         fn clip_image_info(&self) -> Option<(u32, u32)> {
             clipboard(|c| c.get_image()).map(|i| (i.width as u32, i.height as u32))
         }
