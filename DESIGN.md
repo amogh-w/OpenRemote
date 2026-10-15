@@ -15,7 +15,7 @@ frontend on the phone, a small JSON protocol in between.
 | 6 | App switcher and launcher (**done**) | `EnumWindows` filtered like the taskbar (visible, unowned, not cloaked, not a tool window). Actions via `ShowWindow`, `SetForegroundWindow` (after an F24 key tap so Windows allows it) and `PostMessage(WM_CLOSE)`. Launcher = Start Menu `.lnk` files via `ShellExecute` on a COM thread. Icons: `PrivateExtractIconsW` (64 px) for executables, the shell image list (48 px, no shortcut arrow) for shortcuts, encoded to PNG with the `png` crate and cached. The server issues opaque keys; clients never send paths. Pinned and recent apps are not covered. |
 | 7 | Window thumbnails | Later: `IShellItemImageFactory` to PNG. |
 | 8 | Foreground-app push | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` and broadcast `{t:"foreground", title, exe}`. |
-| 9 | Clipboard sync (text, later images) | `arboard` crate. |
+| 9 | Clipboard sync: text and images (**done**) | `arboard` with retries while another program holds the clipboard. Images travel as PNG over HTTP (`POST /clip/image`, `GET /clip/image.png`), validated by dimensions before decoding; the phone converts photos with a canvas. Copies are acknowledged (`clip.ack`). |
 | 10 | Connected-device list | In-memory list (name, IP, last seen) shown in the admin page. |
 | 11 | Pairing | Optional random 128-bit token carried in the QR link. Off by default for now. |
 | 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), the QR code and manual IP entry. |

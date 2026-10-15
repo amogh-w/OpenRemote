@@ -36,6 +36,7 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 - `src/web.rs`: axum routes, WebSocket loop, token check, manifest, `/icon/{file}`, loopback-only `/admin`.
 - `src/input.rs`, `src/winapps.rs`: Windows `Injector` (SendInput, power, clipboard, windows, apps, icons).
   Non-Windows builds get a logging stub.
+- `src/image.rs`: PNG validation and RGBA conversion for clipboard images (limits live here).
 - `src/shell.rs`: tray icon + Win32 message loop (main thread), console attach, error box.
 - `src/main.rs`: CLI, settings, tokio runtime on a worker thread.
 - `build.rs`: assembles `assets/ui/*` into `$OUT_DIR/index.html`; `web.rs` embeds it with `include_str!`.
@@ -52,6 +53,8 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 
 - **Never trust client input.** Clients refer to apps, icons and windows only by server-issued ids; no paths.
   Validate and clamp everything (`is_safe_url`, `is_icon_key`, move/scroll/text limits).
+- Clipboard images: validate PNG dimensions (`image::png_dimensions`) before decoding anything, accept only `image/png`, and keep
+  both `/clip/image*` routes behind the token check. Backend clipboard calls go through the retrying `clipboard()` helper.
 - Window titles and app names are untrusted: render with `textContent`, never `innerHTML`.
 - Every `unsafe` block gets a `// SAFETY:` comment. Win32 shell/icon calls run serialized and COM-initialized
   (see `Registry::icon_png` and `launch`); do not cache failures.

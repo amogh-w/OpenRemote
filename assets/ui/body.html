@@ -136,7 +136,7 @@
       <div class="tiles">
         <button class="tile" data-open="browser"><span class="ic"><svg class="i"><use href="#i-browser"/></svg></span><span><b>Browser</b><small>Tabs, zoom, open a link</small></span></button>
         <button class="tile" data-open="keys"><span class="ic"><svg class="i"><use href="#i-command"/></svg></span><span><b>Special keys</b><small>Fn row, numpad, modifiers</small></span></button>
-        <button class="tile" data-open="clip"><span class="ic"><svg class="i"><use href="#i-clipboard"/></svg></span><span><b>Clipboard</b><small>Send and receive text</small></span></button>
+        <button class="tile" data-open="clip"><span class="ic"><svg class="i"><use href="#i-clipboard"/></svg></span><span><b>Clipboard</b><small>Text and images</small></span></button>
         <button class="tile" data-open="power"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Power</b><small>Shut down, restart, lock</small></span></button>
         <button class="tile" data-open="settings"><span class="ic"><svg class="i"><use href="#i-settings"/></svg></span><span><b>Settings</b><small>Theme, speed, install</small></span></button>
         <button class="tile" data-open="computers"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Computers</b><small>Switch or add a PC</small></span></button>
@@ -185,13 +185,30 @@
     </div>
 
     <div class="sh-view" id="v-clip">
-      <div class="clipbtns">
-        <button id="clipto"><svg class="i"><use href="#i-phone"/></svg>Send to computer</button>
-        <button id="clipfrom"><svg class="i"><use href="#i-monitor"/></svg>Get from computer</button>
+      <div class="glabel">Send to the PC</div>
+      <div class="clipcard">
+        <textarea id="cliptext" placeholder="Type or paste text, or add a photo" spellcheck="false"></textarea>
+        <div class="attach" id="attach" hidden>
+          <img id="imgprev" alt="Photo to send">
+          <span id="attachinfo"></span>
+          <button class="rm" id="imgclear" aria-label="Remove photo"><svg class="i sm"><use href="#i-x"/></svg></button>
+        </div>
       </div>
-      <textarea class="field" id="cliptext" placeholder="Type or paste text to send, or see what the computer copied" spellcheck="false"></textarea>
+      <div class="btnrow">
+        <label class="btn ghost" for="imgfile"><svg class="i sm"><use href="#i-image"/></svg>Add photo</label>
+        <input class="vh" type="file" id="imgfile" accept="image/*">
+        <button class="btn" id="clipsend"><svg class="i sm"><use href="#i-phone"/></svg>Send</button>
+      </div>
+
+      <div class="glabel">Get from the PC</div>
+      <button class="btn ghost" id="clipget" style="width:100%"><svg class="i sm"><use href="#i-monitor"/></svg>Get what the PC copied</button>
+      <div class="clipcard" id="pcres" hidden>
+        <div id="pctext"></div>
+        <img id="imgpc" alt="Image from the PC" hidden>
+      </div>
+      <button class="btn" id="clipcopy" hidden style="width:100%;margin-top:10px"><svg class="i sm"><use href="#i-copy"/></svg>Copy text</button>
+
       <p class="hint" id="clipmsg"></p>
-      <button class="btn" id="clipsend"><svg class="i sm"><use href="#i-paste"/></svg>Send to computer</button>
     </div>
 
     <div class="sh-view" id="v-power">

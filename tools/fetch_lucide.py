@@ -34,7 +34,7 @@ ICONS = {
     "command": "command", "globe": "globe",
     # more tiles and pages
     "settings": "settings", "browser": "panel-top", "clipboard": "clipboard-copy", "paste": "clipboard-paste",
-    "power": "power", "monitor": "monitor", "home": "house", "external": "external-link", "copy": "copy",
+    "image": "image", "power": "power", "monitor": "monitor", "home": "house", "external": "external-link", "copy": "copy",
     "sun": "sun", "moon": "moon", "info": "info", "phone": "smartphone", "wifi": "wifi", "wifi-off": "wifi-off",
     # power
     "restart": "rotate-cw", "sleep": "moon", "lock": "lock", "logoff": "log-out", "hibernate": "arrow-down-to-line",

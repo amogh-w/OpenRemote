@@ -17,7 +17,7 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **App switcher**: live list of open windows with real icons; focus, minimize, maximize, restore or close each one. The active window is highlighted.
 - **App launcher**: every Start Menu app with its icon, A-Z sections, search, and a Recent row.
 - **Browser controls**: back, forward, tabs, zoom, find, and open a link on the PC.
-- **Clipboard** text sync in both directions.
+- **Clipboard** for text and images, both ways: send text, a photo or a pasted image to the PC; get the PC's text or image on the phone (long-press an image to Copy or Save). Copies are confirmed, and a busy Windows clipboard is retried. Sending images works when the page is opened from the PC's own address.
 - **Power**: lock, sleep, hibernate, sign out, restart, shut down (two taps to confirm, except Lock).
 
 **App and desktop**
@@ -120,6 +120,7 @@ Settings live in `%APPDATA%\openremote\settings.json`.
 | `src/input.rs` | Windows `Injector`: `SendInput`, power, clipboard, open URL (stub on other OSes) |
 | `src/winapps.rs` | Window enumeration and actions, Start Menu scan, icon extraction to PNG |
 | `src/shell.rs` | Tray icon and message loop, console attach, error dialog |
+| `src/image.rs` | PNG validation (dimensions before decoding), RGBA conversion for clipboard images |
 | `src/settings.rs` | Persistent port, token and pairing flag |
 | `build.rs` + `assets/ui/` | Assembles the web app into one self-contained page at compile time |
 
@@ -142,8 +143,8 @@ JSON text frames on `GET /ws` (add `?t=<token>` when pairing is on).
 {"t":"text","v":"hello"}                    typed as unicode
 {"t":"power","a":"lock|sleep|hibernate|logoff|restart|shutdown"}
 {"t":"open","url":"https://..."}            http(s) only, opened in the default browser
-{"t":"clip.set","text":"..."}               replace PC clipboard (max 256 KB)
-{"t":"clip.get"}                            -> {"t":"clip","text":"..."}
+{"t":"clip.set","text":"..."}               replace PC clipboard text (max 256 KB) -> {"t":"clip.ack","ok":true|false}
+{"t":"clip.get"}                            -> {"t":"clip","text":"...","image":{"w":..,"h":..}|null}
 {"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,foreground}]}
 {"t":"win.act","id":123,"a":"focus|min|max|restore|close"}
 {"t":"app.list"}                            -> {"t":"app.list","items":[{id,name,icon}]}
@@ -153,11 +154,19 @@ JSON text frames on `GET /ws` (add `?t=<token>` when pairing is on).
 
 The server greets with `{"t":"hello","host":...,"v":...}`. Unknown or malformed messages are ignored.
 
+Plain HTTP routes next to the socket:
+- `GET /icon/<key>.png`: window and app icons. Keys are issued by the server in `win.list` / `app.list`, so clients can only fetch or launch things the server itself found.
+- `GET /clip/image.png`: the PC clipboard image as a PNG.
+- `POST /clip/image`: put an uploaded PNG on the PC clipboard (`Content-Type: image/png`, up to 32 MB, at most 8192 px a side and 36 megapixels). The page converts photos to PNG on the phone first.
+
+The clipboard and icon routes need the token (`?t=`) when pairing is on.
+
 ## Security
 
 - **Plain HTTP, no pairing by default.** Anyone who can reach port 1990 can control the PC (type keys, shut down, read or write the clipboard). Use it on a network you trust, or turn on `--require-token` (the token still travels unencrypted, so it can be sniffed).
 - `/admin` answers only loopback requests with a loopback `Host` header.
 - Input is clamped (move, scroll, text length); `open` accepts only `http`/`https` URLs without whitespace; app launches and icons only by server-issued keys.
+- Image uploads are validated before use: the PNG signature and dimensions are checked before any pixel is decoded, and only `image/png` bodies are accepted. A website cannot send that to the PC without a CORS preflight, which the server never grants.
 - Window titles are sent to connected phones; the web app renders them as text, never HTML.
 
 ## Project layout
@@ -195,7 +204,7 @@ See `CLAUDE.md` for contributor conventions and gotchas.
 
 **Planned**
 - [ ] HTTPS with a self-signed certificate (fingerprint in the QR link); unlocks the full Android install and tilt-to-move
-- [ ] Image clipboard and window thumbnails
+- [ ] Window thumbnails
 - [ ] Pinned and recent apps from the taskbar; Microsoft Store app icons
 - [ ] Input on UAC prompts and the lock screen (small service plus per-session helper)
 - [ ] Installer, update check, and per-device tokens with rate limiting

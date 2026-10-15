@@ -51,6 +51,20 @@ impl Injector for Handle {
     fn icon_png(&self, key: &str) -> Option<Vec<u8>> {
         (key == ICON_KEY).then(|| b"PNG-fake".to_vec())
     }
+    fn clip_set(&self, t: &str) -> bool {
+        self.0 .0.lock().unwrap().push(format!("clip {t}"));
+        t != "fail"
+    }
+    fn clip_image_info(&self) -> Option<(u32, u32)> {
+        Some((16, 9))
+    }
+    fn clip_image_png(&self) -> Option<Vec<u8>> {
+        Some(b"PNG-from-pc".to_vec())
+    }
+    fn clip_image_set(&self, png: &[u8]) -> bool {
+        self.0 .0.lock().unwrap().push(format!("clipimg {}", png.len()));
+        true
+    }
 }
 
 async fn start() -> (u16, Arc<Rec>) {
@@ -80,6 +94,49 @@ async fn http_get(port: u16, path: &str) -> String {
     let mut raw = Vec::new();
     s.read_to_end(&mut raw).await.unwrap();
     String::from_utf8_lossy(&raw).into_owned() // binary bodies (PNG) become lossy text; headers stay intact
+}
+
+async fn http_post(port: u16, path: &str, content_type: &str, body: &[u8]) -> String {
+    let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    let head = format!(
+        "POST {path} HTTP/1.1
+Host: 127.0.0.1:{port}
+Content-Type: {content_type}
+Content-Length: {}
+Connection: close
+
+",
+        body.len()
+    );
+    s.write_all(head.as_bytes()).await.unwrap();
+    // the server may answer 413 and close before reading everything: read the reply while still writing, so a
+    // connection reset cannot swallow it, and ignore write errors
+    let (mut rd, mut wr) = s.into_split();
+    let reader = tokio::spawn(async move {
+        let mut raw = Vec::new();
+        let mut buf = [0u8; 4096];
+        while let Ok(n) = rd.read(&mut buf).await {
+            if n == 0 {
+                break;
+            }
+            raw.extend_from_slice(&buf[..n]);
+        }
+        raw
+    });
+    let _ = wr.write_all(body).await;
+    let raw = reader.await.unwrap();
+    String::from_utf8_lossy(&raw).into_owned()
+}
+
+fn tiny_png(w: u32, h: u32) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Grayscale);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&vec![7u8; (w * h) as usize]).unwrap();
+    }
+    out
 }
 
 async fn wait_for(rec: &Rec, n: usize) -> Vec<String> {
@@ -194,7 +251,7 @@ async fn pwa_assets_are_served() {
     let index = http_get(port, "/").await;
     assert!(index.contains("apple-touch-icon") && index.contains("apple-mobile-web-app-capable"));
     // the assembled page: nav, sheet, bundled icons (Lucide attribution), motion preferences
-    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"i-pad\"", "--ctp-mauve"] {
+    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"i-pad\"", "--ctp-mauve", "id=\"clipget\"", "id=\"imgfile\"", "m.t === 'clip.ack'", "gotClip(m)"] {
         assert!(index.contains(needle), "page is missing {needle}");
     }
     // a single document: exactly one <style>, one <script> block of app code after the early theme script
@@ -257,4 +314,74 @@ async fn icon_route_needs_token_when_pairing_is_on() {
     assert!(no.starts_with("HTTP/1.1 401"), "{}", &no[..30.min(no.len())]);
     let yes = http_get(port, &format!("/icon/{ICON_KEY}.png?t={TOKEN}")).await;
     assert!(yes.starts_with("HTTP/1.1 200"));
+}
+
+#[tokio::test]
+async fn image_upload_reaches_the_clipboard() {
+    let (port, rec) = start_with(false).await;
+    let png = tiny_png(4, 3);
+    let r = http_post(port, "/clip/image", "image/png", &png).await;
+    assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    assert!(r.contains(r#""ok":true"#) && r.contains(r#""w":4"#) && r.contains(r#""h":3"#), "{r}");
+    assert_eq!(wait_for(&rec, 1).await, [format!("clipimg {}", png.len())]);
+}
+
+#[tokio::test]
+async fn image_upload_rejects_bad_input() {
+    let (port, rec) = start_with(false).await;
+    let png = tiny_png(2, 2);
+    let wrong_type = http_post(port, "/clip/image", "text/plain", &png).await;
+    assert!(wrong_type.starts_with("HTTP/1.1 415"), "{wrong_type}");
+    let form = http_post(port, "/clip/image", "application/x-www-form-urlencoded", &png).await;
+    assert!(form.starts_with("HTTP/1.1 415"), "cross-site form posts must not work: {form}");
+    let garbage = http_post(port, "/clip/image", "image/png", b"definitely not a png").await;
+    assert!(garbage.starts_with("HTTP/1.1 400"), "{garbage}");
+    let too_wide = http_post(port, "/clip/image", "image/png", &tiny_png(8200, 4)).await;
+    assert!(too_wide.starts_with("HTTP/1.1 413"), "{too_wide}");
+    let huge_body = vec![0u8; 33 * 1024 * 1024];
+    let big = http_post(port, "/clip/image", "image/png", &huge_body).await;
+    // the server may reset the connection instead of replying while the body is still streaming in
+    assert!(big.is_empty() || big.starts_with("HTTP/1.1 413"), "{}", &big[..big.len().min(60)]);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(rec.0.lock().unwrap().is_empty(), "nothing rejected may reach the clipboard");
+}
+
+#[tokio::test]
+async fn image_download_serves_the_pc_clipboard() {
+    let (port, _) = start_with(false).await;
+    let r = http_get(port, "/clip/image.png").await;
+    assert!(r.starts_with("HTTP/1.1 200") && r.to_lowercase().contains("content-type: image/png"), "{r}");
+    assert!(r.to_lowercase().contains("cache-control: no-store") && r.contains("PNG-from-pc"));
+}
+
+#[tokio::test]
+async fn clipboard_image_routes_need_the_token_when_pairing_is_on() {
+    let (port, rec) = start().await; // require_token = true
+    let png = tiny_png(2, 2);
+    assert!(http_get(port, "/clip/image.png").await.starts_with("HTTP/1.1 401"));
+    assert!(http_post(port, "/clip/image", "image/png", &png).await.starts_with("HTTP/1.1 401"));
+    assert!(http_get(port, &format!("/clip/image.png?t={TOKEN}")).await.starts_with("HTTP/1.1 200"));
+    assert!(http_post(port, &format!("/clip/image?t={TOKEN}"), "image/png", &png).await.starts_with("HTTP/1.1 200"));
+    assert_eq!(wait_for(&rec, 1).await.len(), 1, "only the authorised upload reached the clipboard");
+}
+
+#[tokio::test]
+async fn clipboard_text_roundtrip_reports_success_and_failure() {
+    let (port, rec) = start_with(false).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
+    ws.next().await.unwrap().unwrap(); // hello
+
+    ws.send(Message::Text(r#"{"t":"clip.set","text":"hello"}"#.into())).await.unwrap();
+    let ack: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(ack, serde_json::json!({"t": "clip.ack", "ok": true}));
+
+    ws.send(Message::Text(r#"{"t":"clip.set","text":"fail"}"#.into())).await.unwrap();
+    let nack: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(nack["ok"], false);
+
+    ws.send(Message::Text(r#"{"t":"clip.get"}"#.into())).await.unwrap();
+    let got: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(got["t"], "clip");
+    assert_eq!(got["image"], serde_json::json!({"w": 16, "h": 9}));
+    assert_eq!(wait_for(&rec, 2).await, ["clip hello", "clip fail"]);
 }

@@ -313,6 +313,24 @@ input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border: 0; bord
 .clipbtns button { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 8px; border-radius: var(--r-m); background: var(--card); box-shadow: var(--shadow); font-size: 13.5px; font-weight: 600; }
 .clipbtns svg.i { width: 30px; height: 30px; color: var(--ac); }
 
+/* ---------- clipboard ---------- */
+.btnrow { display: flex; gap: 10px; margin-top: 10px; }
+.btnrow .btn { flex: 1; min-width: 0; }
+label.btn { cursor: pointer; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.clipcard { margin-top: 6px; border-radius: var(--r-m); background: var(--card); box-shadow: inset 0 0 0 1.5px var(--line); overflow: hidden; }
+.clipcard textarea { display: block; width: 100%; min-height: 96px; padding: 12px 14px; background: none; border: 0; outline: 0; resize: none; font-size: 15px; user-select: text; -webkit-user-select: text; }
+.attach { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+.attach img { width: 48px; height: 48px; object-fit: cover; border-radius: 10px; }
+.attach span { flex: 1; min-width: 0; }
+.attach .rm { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--surface); }
+#pctext { padding: 12px 14px; font-size: 15px; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow-y: auto; user-select: text; -webkit-user-select: text; }
+#pctext:empty { display: none; }
+#imgpc { display: block; max-width: 100%; max-height: 240px; margin: 0 auto; padding: 8px; object-fit: contain; -webkit-touch-callout: default; -webkit-user-select: auto; user-select: auto; }
+#imgpc[hidden] { display: none; }
+.hint.bad { color: var(--danger); }
+.hint.ok { color: var(--ok); }
+
 /* ---------- toast ---------- */
 #toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 86px); z-index: 30; display: flex; align-items: center; gap: 8px; max-width: 88vw; padding: 11px 16px; border-radius: 16px; background: var(--ctp-crust); color: var(--ctp-text); font-size: 14px; font-weight: 550; box-shadow: var(--shadow), 0 0 0 1px var(--line);
   opacity: 0; transform: translate(-50%, 14px) scale(.97); pointer-events: none; transition: opacity var(--d) var(--ease), transform var(--d) var(--spring); }

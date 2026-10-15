@@ -121,7 +121,8 @@
         everOnline = true; wasLost = false; warned = false; appsRequested = false;
         if (page === 'apps') refreshApps();
       } else if (m.t === 'pong') { rtt = Math.round(performance.now() - pingAt); if (online) setConn('on'); }
-      else if (m.t === 'clip') gotClip(m.text || '');
+      else if (m.t === 'clip') gotClip(m);
+      else if (m.t === 'clip.ack') gotAck(m);
       else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; renderWins(); }
       else if (m.t === 'app.list') { appItems = m.items || []; appsLoaded = true; renderApps(); }
     };
@@ -500,23 +501,112 @@
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
     send({ t: 'open', url: u }); $('#urlin').value = ''; toast('Opening on the computer', { icon: 'external' }); buzz();
   };
-  const clipText = $('#cliptext'), say = (m) => { $('#clipmsg').textContent = m; };
-  $('#clipsend').onclick = () => { if (!clipText.value) return say('Nothing to send.'); send({ t: 'clip.set', text: clipText.value }); say('Sent to the computer clipboard.'); toast('Sent to computer', { icon: 'circle-check' }); buzz(); };
-  $('#clipto').onclick = async () => {
-    try { if (navigator.clipboard && navigator.clipboard.readText) clipText.value = await navigator.clipboard.readText(); } catch {}
-    if (clipText.value) { send({ t: 'clip.set', text: clipText.value }); say('Sent to the computer clipboard.'); toast('Sent to computer', { icon: 'circle-check' }); buzz(); }
-    else { say('Paste or type your text above, then tap Send.'); clipText.focus(); }
-  };
-  $('#clipfrom').onclick = () => { say('Asking the computer...'); send({ t: 'clip.get' }); };
-  function gotClip(text) {
-    clipText.value = text;
-    if (!text) return say('The computer clipboard has no text.');
-    let ok = false;
-    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); ok = true; } } catch {}
-    if (!ok) { try { clipText.focus(); clipText.select(); ok = document.execCommand('copy'); } catch {} }
-    say(ok ? 'Copied to your phone clipboard.' : 'Received. Long-press the text to copy it.');
-    if (ok) toast('Copied to your phone', { icon: 'circle-check' });
+  // ---- clipboard: one box to send (text or a photo), one button to fetch
+  const clipText = $('#cliptext'), say = (msg, kind) => { const el = $('#clipmsg'); el.textContent = msg; el.classList.toggle('bad', kind === 'bad'); el.classList.toggle('ok', kind === 'ok'); };
+  const sameOrigin = () => !!comps[cur] && comps[cur].base === location.origin;
+  const fmtBytes = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+  const MAX_SIDE_PX = 2560, MAX_UPLOAD = 24 * 1024 * 1024;
+  let photo = null, prevUrl = '';   // the PNG waiting to be sent
+
+  function setPhoto(blob, w, h) {
+    if (prevUrl) URL.revokeObjectURL(prevUrl);
+    photo = blob; prevUrl = blob ? URL.createObjectURL(blob) : '';
+    $('#attach').hidden = !blob;
+    if (blob) { $('#imgprev').src = prevUrl; $('#attachinfo').textContent = 'Photo ' + w + ' x ' + h + ' (' + fmtBytes(blob.size) + ')'; }
   }
+  async function loadBitmap(file) {
+    if (window.createImageBitmap) { try { return await createImageBitmap(file); } catch {} }
+    return new Promise((res, rej) => {
+      const u = URL.createObjectURL(file), im = new Image();
+      im.onload = () => { URL.revokeObjectURL(u); res(im); };
+      im.onerror = () => rej(new Error('This image format is not supported'));
+      im.src = u;
+    });
+  }
+  // Any photo (JPEG/HEIC from the library, screenshots, ...) becomes a PNG the PC can use, scaled down if needed.
+  async function toPng(file) {
+    const bmp = await loadBitmap(file);
+    let scale = Math.min(1, MAX_SIDE_PX / Math.max(bmp.width, bmp.height));
+    for (let i = 0; i < 4; i++) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(bmp.width * scale)); cv.height = Math.max(1, Math.round(bmp.height * scale));
+      cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+      const blob = await new Promise((r) => cv.toBlob(r, 'image/png'));
+      if (!blob) throw new Error('This image format is not supported');
+      if (blob.size <= MAX_UPLOAD) return { blob, w: cv.width, h: cv.height };
+      scale *= 0.7;
+    }
+    throw new Error('The image is too large to send');
+  }
+  async function attach(file) {
+    say('Preparing photo...');
+    try { const r = await toPng(file); setPhoto(r.blob, r.w, r.h); say('Tap Send to copy it to the PC.'); }
+    catch (e) { say('Could not use that image: ' + (e && e.message ? e.message : e), 'bad'); }
+  }
+  $('#imgfile').onchange = (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) attach(f); };
+  $('#imgclear').onclick = () => { setPhoto(null); say(''); };
+  // pasting an image into the box (long-press, Paste) attaches it; pasting text works as usual
+  clipText.addEventListener('paste', (e) => {
+    const cd = e.clipboardData; if (!cd) return;
+    let f = [...cd.files].find((x) => x.type.startsWith('image/'));
+    if (!f) { const it = [...cd.items].find((i) => i.kind === 'file' && i.type.startsWith('image/')); f = it && it.getAsFile(); }
+    if (f) { e.preventDefault(); attach(f); }
+  });
+
+  $('#clipsend').onclick = async () => {
+    if (!online) return say('Not connected to the PC.', 'bad');
+    if (photo) {
+      if (!sameOrigin()) return say('To send photos, open this page from the PC itself (its own address and port).', 'bad');
+      say('Sending ' + fmtBytes(photo.size) + '...');
+      try {
+        const c = comps[cur];
+        const r = await fetch('/clip/image' + (c.token ? '?t=' + encodeURIComponent(c.token) : ''), { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: photo });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j.error || 'the PC answered ' + r.status);
+        say('Sent. The photo is on the PC clipboard.', 'ok'); toast('Photo copied on the PC', { icon: 'circle-check' }); buzz(); setPhoto(null);
+      } catch (e) { say('Could not send the photo: ' + (e && e.message ? e.message : e), 'bad'); }
+      return;
+    }
+    if (!clipText.value) return say('Type or paste some text, or add a photo first.', 'bad');
+    say('Sending...'); send({ t: 'clip.set', text: clipText.value });
+  };
+  function gotAck(m) {
+    if (m.ok) { say('Sent. The text is on the PC clipboard.', 'ok'); toast('Text copied on the PC', { icon: 'circle-check' }); buzz(); }
+    else say('The PC could not set its clipboard (another app may be holding it, or the text is too long). Try again.', 'bad');
+  }
+
+  $('#clipget').onclick = () => {
+    if (!online) return say('Not connected to the PC.', 'bad');
+    say('Asking the PC...'); send({ t: 'clip.get' });
+  };
+  function gotClip(m) {
+    const text = m.text || '', img = m.image, c = comps[cur];
+    $('#pctext').textContent = text;
+    const im = $('#imgpc');
+    im.hidden = !img;
+    if (img) im.src = c.base + '/clip/image.png?v=' + Date.now() + (c.token ? '&t=' + encodeURIComponent(c.token) : '');
+    $('#pcres').hidden = !text && !img;
+    $('#clipcopy').hidden = !text;
+    if (text && img) say('The PC copied text and an image. Press and hold the image to copy or save it.', 'ok');
+    else if (text) say('Tap Copy text to put it on your phone.', 'ok');
+    else if (img) say('Press and hold the image, then choose Copy or Add to Photos.', 'ok');
+    else say('The PC clipboard is empty.', 'bad');
+  }
+  $('#imgpc').onerror = () => say('Could not load the image from the PC.', 'bad');
+  // Copy must run inside the tap itself: iOS refuses clipboard writes that happen after a network reply.
+  $('#clipcopy').onclick = async () => {
+    const text = $('#pctext').textContent;
+    const within = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+    let ok = false;
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { await within(navigator.clipboard.writeText(text), 1500); ok = true; } } catch {}
+    if (!ok) {
+      const ta = document.createElement('textarea'); ta.value = text; ta.readOnly = true; ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+      document.body.appendChild(ta); ta.focus(); ta.setSelectionRange(0, text.length);
+      try { ok = document.execCommand('copy'); } catch {} ta.remove();
+    }
+    if (ok) { say('Copied to your phone.', 'ok'); toast('Copied to your phone', { icon: 'circle-check' }); buzz(); }
+    else say('Your browser blocked the copy. Press and hold the text and choose Copy.', 'bad');
+  };
   $$('[data-power]').forEach((t) => {
     const small = $('small', t), orig = small.textContent; let armT = 0;
     t.onclick = () => {

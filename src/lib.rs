@@ -1,4 +1,5 @@
 pub mod command;
+pub mod image;
 pub mod input;
 pub mod settings;
 pub mod shell;

@@ -51,6 +51,23 @@ mod win {
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+    /// Run a clipboard operation, retrying while another program holds the clipboard open (clipboard
+    /// managers and remote tools do this for a few milliseconds). Any other error gives up at once.
+    fn clipboard<T>(op: impl Fn(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Option<T> {
+        for _ in 0..8 {
+            match arboard::Clipboard::new() {
+                Ok(mut c) => match op(&mut c) {
+                    Ok(v) => return Some(v),
+                    Err(arboard::Error::ClipboardOccupied) => {}
+                    Err(_) => return None,
+                },
+                Err(_) => {}
+            }
+            std::thread::sleep(std::time::Duration::from_millis(40));
+        }
+        None
+    }
+
     /// Fire-and-forget child process with no console window.
     fn spawn_hidden(program: &str, args: &[&str]) {
         let _ = Command::new(program)
@@ -100,13 +117,28 @@ mod win {
         }
 
         fn clip_get(&self) -> Option<String> {
-            arboard::Clipboard::new().ok()?.get_text().ok()
+            clipboard(|c| c.get_text())
         }
 
-        fn clip_set(&self, text: &str) {
-            if let Ok(mut c) = arboard::Clipboard::new() {
-                let _ = c.set_text(text.to_owned());
-            }
+        fn clip_set(&self, text: &str) -> bool {
+            clipboard(|c| c.set_text(text.to_owned())).is_some()
+        }
+
+        fn clip_image_info(&self) -> Option<(u32, u32)> {
+            clipboard(|c| c.get_image()).map(|i| (i.width as u32, i.height as u32))
+        }
+
+        fn clip_image_png(&self) -> Option<Vec<u8>> {
+            let img = clipboard(|c| c.get_image())?;
+            crate::image::encode_rgba(img.width as u32, img.height as u32, &img.bytes)
+        }
+
+        fn clip_image_set(&self, png: &[u8]) -> bool {
+            let Ok((w, h, rgba)) = crate::image::decode_rgba(png) else { return false };
+            clipboard(|c| {
+                c.set_image(arboard::ImageData { width: w as usize, height: h as usize, bytes: std::borrow::Cow::Borrowed(&rgba) })
+            })
+            .is_some()
         }
 
         fn move_rel(&self, dx: i32, dy: i32) {

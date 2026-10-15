@@ -131,7 +131,22 @@ pub trait Injector: Send + Sync {
     fn clip_get(&self) -> Option<String> {
         None
     }
-    fn clip_set(&self, _text: &str) {}
+    /// Replace the clipboard text; false if the clipboard could not be written.
+    fn clip_set(&self, _text: &str) -> bool {
+        false
+    }
+    /// Width and height of an image on the clipboard, if there is one.
+    fn clip_image_info(&self) -> Option<(u32, u32)> {
+        None
+    }
+    /// The clipboard image encoded as PNG.
+    fn clip_image_png(&self) -> Option<Vec<u8>> {
+        None
+    }
+    /// Put a (validated) PNG on the clipboard as an image.
+    fn clip_image_set(&self, _png: &[u8]) -> bool {
+        false
+    }
     fn windows(&self) -> Vec<WindowInfo> {
         Vec::new()
     }
@@ -164,7 +179,13 @@ impl<I: Injector> Dispatcher<I> {
     pub fn handle(&self, msg: &Msg) -> Option<serde_json::Value> {
         match msg {
             Msg::ClipGet => {
-                return Some(serde_json::json!({"t": "clip", "text": self.inj.clip_get().unwrap_or_default()}));
+                let text = self.inj.clip_get().unwrap_or_default();
+                let image = self.inj.clip_image_info().map(|(w, h)| serde_json::json!({"w": w, "h": h}));
+                return Some(serde_json::json!({"t": "clip", "text": text, "image": image}));
+            }
+            Msg::ClipSet { text } => {
+                let ok = text.len() <= MAX_CLIP_BYTES && self.inj.clip_set(text);
+                return Some(serde_json::json!({"t": "clip.ack", "ok": ok}));
             }
             Msg::WinList => return Some(serde_json::json!({"t": "win.list", "items": self.inj.windows()})),
             Msg::AppList => return Some(serde_json::json!({"t": "app.list", "items": self.inj.apps()})),
@@ -199,20 +220,30 @@ impl<I: Injector> Dispatcher<I> {
                     self.inj.open_url(url);
                 }
             }
-            Msg::ClipSet { text } => {
-                if text.len() <= MAX_CLIP_BYTES {
-                    self.inj.clip_set(text);
-                }
-            }
             Msg::WinAct { id, a } => self.inj.window_action(*id, *a),
             Msg::AppLaunch { id } => {
                 if is_icon_key(id) {
                     self.inj.launch_app(id);
                 }
             }
-            Msg::ClipGet | Msg::WinList | Msg::AppList | Msg::Ping => {}
+            Msg::ClipGet | Msg::ClipSet { .. } | Msg::WinList | Msg::AppList | Msg::Ping => {}
         }
         None
+    }
+
+    /// The clipboard image as PNG (served at `GET /clip/image.png`).
+    pub fn clip_image_png(&self) -> Option<Vec<u8>> {
+        self.inj.clip_image_png()
+    }
+
+    /// Validate an uploaded PNG and put it on the clipboard. Errors are short, client-safe messages.
+    pub fn clip_image_set(&self, png: &[u8]) -> Result<(u32, u32), &'static str> {
+        let dims = crate::image::png_dimensions(png)?;
+        if self.inj.clip_image_set(png) {
+            Ok(dims)
+        } else {
+            Err("could not write the clipboard")
+        }
     }
 
     /// PNG for an icon key. Rejects anything that is not a key this server could have issued.
@@ -366,8 +397,19 @@ pub mod testing {
         fn clip_get(&self) -> Option<String> {
             Some("from pc".into())
         }
-        fn clip_set(&self, t: &str) {
+        fn clip_set(&self, t: &str) -> bool {
             self.0.lock().unwrap().push(format!("clip {t}"));
+            t != "fail"
+        }
+        fn clip_image_info(&self) -> Option<(u32, u32)> {
+            Some((3, 2))
+        }
+        fn clip_image_png(&self) -> Option<Vec<u8>> {
+            Some(vec![1, 2, 3])
+        }
+        fn clip_image_set(&self, png: &[u8]) -> bool {
+            self.0.lock().unwrap().push(format!("clipimg {}", png.len()));
+            true
         }
         fn windows(&self) -> Vec<WindowInfo> {
             vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: "0123456789abcdef".into(), minimized: false, foreground: true }]
@@ -452,7 +494,31 @@ mod tests {
         let rec = Arc::new(Rec::default());
         let d = Dispatcher::new(rec);
         let r = d.handle(&serde_json::from_str(r#"{"t":"clip.get"}"#).unwrap()).unwrap();
-        assert_eq!(r, serde_json::json!({"t": "clip", "text": "from pc"}));
+        assert_eq!(r, serde_json::json!({"t": "clip", "text": "from pc", "image": {"w": 3, "h": 2}}));
+    }
+
+    #[test]
+    fn clip_set_is_acknowledged() {
+        let d = Dispatcher::new(Arc::new(Rec::default()));
+        let ok = d.handle(&serde_json::from_str(r#"{"t":"clip.set","text":"hi"}"#).unwrap()).unwrap();
+        assert_eq!(ok, serde_json::json!({"t": "clip.ack", "ok": true}));
+        let failed = d.handle(&serde_json::from_str(r#"{"t":"clip.set","text":"fail"}"#).unwrap()).unwrap();
+        assert_eq!(failed["ok"], false, "a backend failure must reach the phone");
+        let huge = serde_json::json!({"t": "clip.set", "text": "x".repeat(300_000)}).to_string();
+        let big = d.handle(&serde_json::from_str(&huge).unwrap()).unwrap();
+        assert_eq!(big["ok"], false, "over the size cap is refused");
+    }
+
+    #[test]
+    fn clip_image_upload_is_validated_before_the_backend_sees_it() {
+        let rec = Arc::new(Rec::default());
+        let d = Dispatcher::new(rec.clone());
+        let png = crate::image::encode_rgba(2, 2, &[255u8; 16]).unwrap();
+        assert_eq!(d.clip_image_set(&png), Ok((2, 2)));
+        assert_eq!(rec.take(), [format!("clipimg {}", png.len())]);
+        assert_eq!(d.clip_image_set(b"not an image at all"), Err("not a PNG image"));
+        assert!(rec.take().is_empty(), "garbage must never reach the backend");
+        assert_eq!(d.clip_image_png(), Some(vec![1, 2, 3]));
     }
 
     #[test]
