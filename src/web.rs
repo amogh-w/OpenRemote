@@ -181,7 +181,8 @@ async fn reply_for<I: Injector + 'static>(st: &Arc<AppState<I>>, msg: Msg) -> Op
 }
 
 async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppState<I>>) {
-    let hello = serde_json::json!({"t": "hello", "host": st.hostname, "v": env!("CARGO_PKG_VERSION")});
+    let helper = st.dispatcher.helper_active();
+    let hello = serde_json::json!({"t": "hello", "host": st.hostname, "v": env!("CARGO_PKG_VERSION"), "helper": helper});
     if socket.send(Message::Text(hello.to_string().into())).await.is_err() {
         return;
     }

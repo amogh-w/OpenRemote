@@ -159,6 +159,7 @@ async fn client_drives_input() {
 
     let hello = ws.next().await.unwrap().unwrap().into_text().unwrap();
     assert!(hello.contains(r#""t":"hello""#) && hello.contains("TEST-PC"));
+    assert!(hello.contains(r#""helper":false"#), "hello reports whether the SYSTEM input helper is running: {hello}");
 
     for m in [
         r#"{"t":"move","dx":4,"dy":-1}"#,

@@ -21,6 +21,7 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **Power**: lock, sleep, hibernate, sign out, restart, shut down (two taps to confirm, except Lock).
 
 **App and desktop**
+- **Input on UAC prompts, administrator windows and the lock screen**, with an optional SYSTEM helper service you install on purpose (off by default, see Security).
 - **Tray icon** with Show phone link and Quit; the release build has no console window.
 - **Installable web app (PWA)** with a manifest, icons and an offline shell.
 - **Catppuccin theming**: Latte, Frappe, Macchiato, Mocha or Auto, with six accent colors.
@@ -74,6 +75,9 @@ Options:
 | `--port N` | listen port (default 1990, saved) |
 | `--hostname NAME` | name shown on the phone (default: computer name) |
 | `--no-tray` | no tray icon; run in the foreground |
+| `--install-helper --yes` | install the SYSTEM input helper (needs administrator approval on the PC) |
+| `--uninstall-helper` | remove the helper |
+| `--helper-status` | say whether the helper is running |
 | `-v` | log ignored messages |
 
 Settings live in `%APPDATA%\openremote\settings.json`.
@@ -117,6 +121,7 @@ Settings live in `%APPDATA%\openremote\settings.json`.
 | `src/command.rs` | `Msg` types, `Injector` trait, `Dispatcher`, key-name table, URL and id validation |
 | `src/input.rs` | Windows `Injector`: `SendInput`, power, clipboard, open URL (stub on other OSes) |
 | `src/media.rs` | Now-playing info and cover art from the Windows system media session |
+| `src/uac.rs` | Optional SYSTEM input helper: wire format, helper process, Windows service, install and uninstall |
 | `src/winapps.rs` | Window enumeration and actions, Start Menu scan, icon extraction to PNG |
 | `src/shell.rs` | Tray icon and message loop, console attach, error dialog |
 | `src/image.rs` | PNG validation (dimensions before decoding), RGBA conversion for clipboard images |
@@ -159,6 +164,31 @@ Plain HTTP routes next to the socket:
 - `GET /clip/image.png`: the PC clipboard image as a PNG.
 - `GET /media/art`: cover image of the track that is playing (PNG or JPEG), 404 when there is none.
 - `POST /clip/image`: put an uploaded PNG on the PC clipboard (`Content-Type: image/png`, up to 32 MB, at most 8192 px a side and 36 megapixels). The page converts photos to PNG on the phone first.
+
+## Input on UAC prompts and the lock screen
+
+Windows does not let a normal program send input to administrator windows or to the secure desktop (the UAC
+prompt, the lock screen). To make the phone's mouse and keyboard work there, OpenRemote has an optional helper:
+
+```
+openremote --install-helper --yes     # asks for administrator approval on the PC, installs the service
+openremote --helper-status            # is it running?
+openremote --uninstall-helper         # removes it again
+```
+
+How it works: the command copies `openremote.exe` to `C:\Program Files\OpenRemote\` (only administrators can
+write there) and registers a Windows service that runs as SYSTEM. The service keeps one helper process alive
+in the signed-in user's session with a SYSTEM token. The helper listens on a local named pipe that only SYSTEM
+and the signed-in user can open (remote clients are refused) and sends the input to whichever desktop is
+currently getting input. The normal app forwards mouse and keyboard events to the helper when it is there and
+falls back to plain `SendInput` when it is not. Settings > App on the phone shows whether it is active.
+
+Read before turning it on:
+
+- Any program running as you can use the helper to send input, including to a UAC prompt.
+- There is no pairing yet, so anyone on your network who can reach the app can click through a UAC prompt on this PC.
+- Use it only on a network you fully trust, and remove it (`--uninstall-helper`) when you do not need it.
+- Text typed from the phone uses the keyboard layout of the signed-in user, also on the secure desktop.
 
 ## Security
 
@@ -207,7 +237,6 @@ See `CLAUDE.md` for contributor conventions and gotchas.
 - [ ] HTTPS with a self-signed certificate (its fingerprint shown during pairing); unlocks the full Android install and tilt-to-move
 - [ ] Window thumbnails
 - [ ] Pinned and recent apps from the taskbar; Microsoft Store app icons
-- [ ] Input on UAC prompts and the lock screen (small service plus per-session helper)
 - [ ] Installer, update check, and rate limiting for pairing
 - [ ] Keyboard shortcuts macros (key sequences with delays)
 - [ ] macOS and Linux backends behind the existing `Injector` trait

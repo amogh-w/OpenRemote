@@ -98,6 +98,9 @@
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 'hello') {
         pc.name = m.host || pc.name; paintName(); setConn('on');
+        $('#helperstate').textContent = m.helper
+          ? 'On. The mouse and keyboard also work on UAC prompts, administrator windows and the lock screen.'
+          : 'Off. To use the mouse on UAC prompts, run "openremote --install-helper --yes" on the PC (see the README).';
         if (everOnline && wasLost) toast('Reconnected', { icon: 'wifi' });
         everOnline = true; wasLost = false; warned = false; appsRequested = false;
         if (page === 'apps') refreshApps();

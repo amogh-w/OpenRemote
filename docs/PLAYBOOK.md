@@ -272,6 +272,25 @@ change are saved to the settings file. Unknown flags exit with the usage text.
 One tiny JSON file under the user's config dir (`%APPDATA%\<app>\settings.json`). Every field has a
 serde default so old files keep loading and unknown old fields are ignored. Create it on first run.
 
+### 5.6.1 Elevated input (UAC prompts, admin windows, lock screen)
+
+A normal process cannot send input to elevated windows or to the secure desktop. The pattern that works,
+all inside the one binary:
+
+- `--service`: a LocalSystem service that keeps one helper alive in the active console session
+  (poll `WTSGetActiveConsoleSessionId`, copy the SYSTEM token from that session's `winlogon.exe`, start the
+  helper with `CreateProcessAsUserW` on `winsta0\default`).
+- `--input-helper`: reads fixed-size input frames from a named pipe, attaches the thread to the input desktop
+  (`OpenInputDesktop`, `SetThreadDesktop`) every few hundred milliseconds, and injects with `SendInput`.
+- The normal app sends events to the helper when the pipe is there, otherwise injects locally. All input goes
+  through one `emit` function so the two paths cannot drift.
+- Pipe: access rule for SYSTEM and the signed-in user only (build the SDDL from a validated SID string), refuse
+  remote clients, first-instance flag so nobody can squat the name. Reject out-of-range frames when decoding.
+- Install and uninstall are commands (`--install-helper --yes`, `--uninstall-helper`) that re-run themselves
+  elevated. The install copies the binary into Program Files so a normal program cannot replace it.
+- It is opt-in and off by default, with the risks stated in the README. Never install it on the user's machine
+  while testing; test the pipe by running the helper by hand and sending ping or zero-movement frames.
+
 ### 5.7 Platform layer rules
 
 - Every `unsafe` block has a `// SAFETY:` comment saying why it is sound.
@@ -1001,7 +1020,6 @@ In this order:
 6. Foreground-app push so the UI can adapt to the active program.
 7. Window thumbnails, pinned and recent apps.
 8. HTTPS with a self-signed certificate, then the full Android install and sensor features.
-9. Input on elevated prompts and the lock screen (a small service plus a per-session helper).
 10. Installer and update check. Macros. Other operating systems behind the same trait.
 
 Things that stay out of scope: screen mirroring, file transfer, telemetry, accounts.

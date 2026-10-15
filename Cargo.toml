@@ -18,6 +18,14 @@ arboard = { version = "3", default-features = false, features = ["image-data"] }
 tray-icon = { version = "0.21", default-features = false }
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Services",
+    "Win32_System_StationsAndDesktops",
+    "Win32_Security_Authorization",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_Gdi",
     "Win32_Security",

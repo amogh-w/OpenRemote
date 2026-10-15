@@ -1,7 +1,7 @@
 //! Platform input injection. Windows uses `SendInput`; other platforms get a logging stub.
 
 #[cfg(windows)]
-pub use win::WinInjector as PlatformInjector;
+pub use win::{inject, WinInjector as PlatformInjector};
 
 #[cfg(not(windows))]
 pub use stub::LogInjector as PlatformInjector;
@@ -17,6 +17,55 @@ mod win {
     #[derive(Default)]
     pub struct WinInjector {
         reg: crate::winapps::Registry,
+        helper: crate::uac::HelperLink,
+    }
+
+    impl WinInjector {
+        /// Send an input event through the SYSTEM helper when it is installed (it reaches UAC prompts and
+        /// administrator windows), otherwise inject it here.
+        fn emit(&self, ev: crate::uac::Event) {
+            if !self.helper.send(ev) {
+                inject(&ev);
+            }
+        }
+    }
+
+    /// Inject one input event into the desktop this thread is attached to.
+    pub fn inject(ev: &crate::uac::Event) {
+        use crate::uac::Event;
+        match *ev {
+            Event::Move { dx, dy } => send(mouse(MOUSEEVENTF_MOVE, dx, dy, 0)),
+            Event::Button { b, down } => {
+                let flags = match (b, down) {
+                    (0, true) => MOUSEEVENTF_LEFTDOWN,
+                    (0, false) => MOUSEEVENTF_LEFTUP,
+                    (1, true) => MOUSEEVENTF_RIGHTDOWN,
+                    (1, false) => MOUSEEVENTF_RIGHTUP,
+                    (_, true) => MOUSEEVENTF_MIDDLEDOWN,
+                    (_, false) => MOUSEEVENTF_MIDDLEUP,
+                };
+                send(mouse(flags, 0, 0, 0));
+            }
+            Event::Wheel { horizontal, delta } => {
+                let flag = if horizontal { MOUSEEVENTF_HWHEEL } else { MOUSEEVENTF_WHEEL };
+                send(mouse(flag, 0, 0, delta));
+            }
+            Event::Key { vk, down } => {
+                if vk == 0 {
+                    return;
+                }
+                let mut flags = if down { 0 } else { KEYEVENTF_KEYUP };
+                if is_extended(vk) {
+                    flags |= KEYEVENTF_EXTENDEDKEY;
+                }
+                send(keybd(vk as u16, 0, flags));
+            }
+            Event::Unit(unit) => {
+                send(keybd(0, unit, KEYEVENTF_UNICODE));
+                send(keybd(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP));
+            }
+            Event::Ping => {}
+        }
     }
 
     fn send(input: INPUT) {
@@ -150,40 +199,32 @@ mod win {
         }
 
         fn move_rel(&self, dx: i32, dy: i32) {
-            send(mouse(MOUSEEVENTF_MOVE, dx, dy, 0));
+            self.emit(crate::uac::Event::Move { dx, dy });
         }
 
         fn button(&self, b: Button, down: bool) {
-            let flags = match (b, down) {
-                (Button::Left, true) => MOUSEEVENTF_LEFTDOWN,
-                (Button::Left, false) => MOUSEEVENTF_LEFTUP,
-                (Button::Right, true) => MOUSEEVENTF_RIGHTDOWN,
-                (Button::Right, false) => MOUSEEVENTF_RIGHTUP,
-                (Button::Middle, true) => MOUSEEVENTF_MIDDLEDOWN,
-                (Button::Middle, false) => MOUSEEVENTF_MIDDLEUP,
+            let b = match b {
+                Button::Left => 0,
+                Button::Right => 1,
+                Button::Middle => 2,
             };
-            send(mouse(flags, 0, 0, 0));
+            self.emit(crate::uac::Event::Button { b, down });
         }
 
         fn wheel(&self, horizontal: bool, delta: i32) {
-            let flag = if horizontal { MOUSEEVENTF_HWHEEL } else { MOUSEEVENTF_WHEEL };
-            send(mouse(flag, 0, 0, delta));
+            self.emit(crate::uac::Event::Wheel { horizontal, delta });
         }
 
         fn key(&self, vk: u8, down: bool) {
-            if vk == 0 {
-                return;
-            }
-            let mut flags = if down { 0 } else { KEYEVENTF_KEYUP };
-            if is_extended(vk) {
-                flags |= KEYEVENTF_EXTENDEDKEY;
-            }
-            send(keybd(vk as u16, 0, flags));
+            self.emit(crate::uac::Event::Key { vk, down });
         }
 
         fn type_unit(&self, unit: u16) {
-            send(keybd(0, unit, KEYEVENTF_UNICODE));
-            send(keybd(0, unit, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP));
+            self.emit(crate::uac::Event::Unit(unit));
+        }
+
+        fn helper_active(&self) -> bool {
+            self.helper.active()
         }
 
         fn vk_for_char(&self, c: char) -> u8 {

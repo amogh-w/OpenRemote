@@ -17,7 +17,7 @@ mod imp {
         AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DispatchMessageW, GetMessageW, MessageBoxW, TranslateMessage, MB_ICONERROR, MB_OK, MSG,
+        DispatchMessageW, GetMessageW, MessageBoxW, TranslateMessage, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MSG,
     };
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -45,6 +45,13 @@ mod imp {
         // SAFETY: both strings are NUL-terminated and outlive the call.
         unsafe {
             MessageBoxW(null_mut(), wide(msg).as_ptr(), wide("OpenRemote").as_ptr(), MB_OK | MB_ICONERROR);
+        }
+    }
+
+    pub fn info_box(msg: &str) {
+        // SAFETY: both strings are NUL-terminated and outlive the call.
+        unsafe {
+            MessageBoxW(null_mut(), wide(msg).as_ptr(), wide("OpenRemote").as_ptr(), MB_OK | MB_ICONINFORMATION);
         }
     }
 
@@ -102,12 +109,15 @@ mod imp {
 }
 
 #[cfg(windows)]
-pub use imp::{attach_console, error_box, open_in_browser, run_tray};
+pub use imp::{attach_console, error_box, info_box, open_in_browser, run_tray};
 
 #[cfg(not(windows))]
 mod imp {
     pub fn attach_console() {}
     pub fn error_box(msg: &str) {
+        eprintln!("{msg}");
+    }
+    pub fn info_box(msg: &str) {
         eprintln!("{msg}");
     }
     pub fn open_in_browser(url: &str) {
@@ -121,4 +131,4 @@ mod imp {
 }
 
 #[cfg(not(windows))]
-pub use imp::{attach_console, error_box, open_in_browser, run_tray};
+pub use imp::{attach_console, error_box, info_box, open_in_browser, run_tray};

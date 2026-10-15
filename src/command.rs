@@ -152,6 +152,10 @@ pub trait Injector: Send + Sync {
     fn type_unit(&self, unit: u16);
     /// Virtual-key for a single typed character (VkKeyScan on Windows).
     fn vk_for_char(&self, c: char) -> u8;
+    /// True when the SYSTEM input helper is running (input then also reaches UAC prompts and admin windows).
+    fn helper_active(&self) -> bool {
+        false
+    }
     fn power(&self, _act: PowerAct) {}
     fn open_url(&self, _url: &str) {}
     fn clip_get(&self) -> Option<String> {
@@ -273,6 +277,10 @@ impl<I: Injector> Dispatcher<I> {
             Msg::ClipGet | Msg::ClipSet { .. } | Msg::MediaGet | Msg::WinList | Msg::AppList | Msg::Ping => {}
         }
         None
+    }
+
+    pub fn helper_active(&self) -> bool {
+        self.inj.helper_active()
     }
 
     /// The current track's cover (served at `GET /media/art`).

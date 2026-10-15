@@ -23,7 +23,7 @@ frontend on the phone, a small JSON protocol in between.
 | 14 | Tray icon and menu (**done**: Show phone link, Quit) | `tray-icon` crate. The server runs on a worker thread while the main thread runs the Win32 message loop; the release build uses the GUI subsystem so there is no console window. |
 | 15 | Settings UI | No native GUI. The admin page on `127.0.0.1` plus a settings file under `%APPDATA%`. |
 | 16 | Launch on startup | `HKCU\...\Run` value (no admin rights needed). |
-| 17 | Works on UAC prompts and the lock screen | Later: the same exe in a `--service` mode that spawns a `--helper` in the active session. |
+| 17 | Works on UAC prompts and the lock screen (**done, opt-in**) | The same exe has three extra modes: `--service` (LocalSystem service that keeps one helper alive in the active console session), `--input-helper` (SYSTEM token copied from that session's winlogon, attaches to the input desktop, injects events read from a named pipe) and `--install-helper` / `--uninstall-helper`. The pipe is limited to SYSTEM and the signed-in user and refuses remote clients. The app sends input to the helper when connected and injects locally otherwise. Installed copy lives in Program Files so a normal program cannot replace the service binary. Off by default; see the README for the risks (no pairing yet). |
 | 18 | Keep the cursor visible with no mouse attached | A few lines of `SystemParametersInfo` (MouseKeys). |
 
 Out of scope for now: Bluetooth transport, auto-update, screen mirroring, file transfer, telemetry.
@@ -68,4 +68,4 @@ animation frame.
 1. **Core** (done): WebSocket server, mouse, keyboard, text, admin page, web app, PWA basics.
 2. **Desktop shell**: tray icon (done), settings page in the admin UI, autostart, mDNS, device list.
 3. **Extras**: app switcher and launcher (done), foreground push, image clipboard.
-4. **Hardening**: service and helper for UAC/lock screen, TLS, thumbnails, installer, update check.
+4. **Hardening**: TLS, thumbnails, installer, update check.

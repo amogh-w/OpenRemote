@@ -16,12 +16,20 @@ openremote - control this PC from a phone browser
 USAGE: openremote [OPTIONS]
   --port <PORT>     listen port (default from settings, 1990)
   --hostname <NAME> name shown in the admin page and app (default: computer name)
+  --install-helper --yes   install the SYSTEM input helper (UAC prompts, admin windows, lock screen)
+  --uninstall-helper       remove it again
+  --helper-status          is the helper running?
   --no-tray         no tray icon; run the server in the foreground
   -v, --verbose     log ignored messages
   -h, --help";
 
 fn main() {
     shell::attach_console();
+    // service, helper and install modes run before anything else starts
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = openremote::uac::cli(&argv) {
+        std::process::exit(code);
+    }
     let mut st = Settings::load_or_create().unwrap_or_else(|e| die(&format!("cannot read settings: {e}")));
     let mut hostname = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "My PC".into());
     let mut verbose = false;
