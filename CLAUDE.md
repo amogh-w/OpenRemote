@@ -33,7 +33,7 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 
 - `src/command.rs`: `Msg` (serde, tagged by `t`), `Injector` trait (platform backend, default no-op methods),
   `Dispatcher` (validation, clamping, replies), key-name table. Platform-independent and unit-tested.
-- `src/web.rs`: axum routes, WebSocket loop, token check, manifest, `/icon/{file}`, loopback-only `/admin`.
+- `src/web.rs`: axum routes, WebSocket loop, manifest, `/icon/{file}`, loopback-only `/admin`.
 - `src/input.rs`, `src/winapps.rs`: Windows `Injector` (SendInput, power, clipboard, windows, apps, icons).
   Non-Windows builds get a logging stub.
 - `src/image.rs`: PNG validation and RGBA conversion for clipboard images (limits live here).
@@ -53,13 +53,13 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 
 - **Never trust client input.** Clients refer to apps, icons and windows only by server-issued ids; no paths.
   Validate and clamp everything (`is_safe_url`, `is_icon_key`, move/scroll/text limits).
-- Clipboard images: validate PNG dimensions (`image::png_dimensions`) before decoding anything, accept only `image/png`, and keep
-  both `/clip/image*` routes behind the token check. Backend clipboard calls go through the retrying `clipboard()` helper.
+- Clipboard images: validate PNG dimensions (`image::png_dimensions`) before decoding anything, and accept only `image/png` bodies.
+  Backend clipboard calls go through the retrying `clipboard()` helper.
 - Window titles and app names are untrusted: render with `textContent`, never `innerHTML`.
 - Every `unsafe` block gets a `// SAFETY:` comment. Win32 shell/icon calls run serialized and COM-initialized
   (see `Registry::icon_png` and `launch`); do not cache failures.
 - The admin page is loopback-only and checks the `Host` header. Do not widen it.
-- Pairing is optional and off by default; token logic must keep working (`--require-token`) and stay tested.
+- There is no pairing or auth at the moment (the first token/QR version was removed on purpose; a redesign is on the roadmap). Do not add ad-hoc auth; keep the security notes in `README.md` honest about it.
 
 ## Frontend conventions (`assets/ui/`)
 

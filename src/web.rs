@@ -3,13 +3,12 @@
 use crate::command::{Dispatcher, Injector, Msg};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::body::Bytes;
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, Query, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Json;
 use axum::Router;
-use serde::Deserialize;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -23,9 +22,6 @@ const MAX_WS_MESSAGE: usize = 512 * 1024;
 
 pub struct AppState<I: Injector> {
     pub dispatcher: Dispatcher<I>,
-    pub token: String,
-    /// When false the WebSocket accepts connections without a token.
-    pub require_token: bool,
     pub hostname: String,
     pub verbose: bool,
 }
@@ -35,7 +31,7 @@ pub fn router<I: Injector + 'static>(state: Arc<AppState<I>>) -> Router {
         .route("/", get(index))
         .route("/ws", get(ws_handler::<I>))
         .route("/admin", get(admin::<I>))
-        .route("/manifest.webmanifest", get(manifest::<I>))
+        .route("/manifest.webmanifest", get(manifest))
         .route("/icon/{file}", get(app_icon::<I>))
         .route("/clip/image.png", get(clip_image_get::<I>))
         .route(
@@ -53,25 +49,12 @@ pub async fn serve<I: Injector + 'static>(listener: TcpListener, state: Arc<AppS
     axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>()).await
 }
 
-/// Constant-time comparison so token checks don't leak a matching prefix.
-pub fn token_ok(expected: &str, given: &str) -> bool {
-    let (a, b) = (expected.as_bytes(), given.as_bytes());
-    let mut diff = (a.len() ^ b.len()) as u8;
-    for i in 0..a.len() {
-        diff |= a[i] ^ b.get(i).copied().unwrap_or(0);
-    }
-    diff == 0
-}
-
 async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
 }
 
 /// The image currently on the PC clipboard, as PNG. Read live, so it is always current.
-async fn clip_image_get<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Query(q): Query<WsQuery>) -> Response {
-    if st.require_token && !token_ok(&st.token, q.t.as_deref().unwrap_or("")) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+async fn clip_image_get<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>) -> Response {
     let st2 = st.clone();
     match tokio::task::spawn_blocking(move || st2.dispatcher.clip_image_png()).await {
         Ok(Some(bytes)) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "no-store")], bytes).into_response(),
@@ -83,13 +66,9 @@ async fn clip_image_get<I: Injector + 'static>(State(st): State<Arc<AppState<I>>
 /// cannot be sent cross-site without a CORS preflight, which this server never allows.
 async fn clip_image_post<I: Injector + 'static>(
     State(st): State<Arc<AppState<I>>>,
-    Query(q): Query<WsQuery>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Response {
-    if st.require_token && !token_ok(&st.token, q.t.as_deref().unwrap_or("")) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
     let is_png = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -117,11 +96,7 @@ async fn clip_image_post<I: Injector + 'static>(
 async fn app_icon<I: Injector + 'static>(
     State(st): State<Arc<AppState<I>>>,
     Path(file): Path<String>,
-    Query(q): Query<WsQuery>,
 ) -> Response {
-    if st.require_token && !token_ok(&st.token, q.t.as_deref().unwrap_or("")) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
     let Some(key) = file.strip_suffix(".png").map(str::to_owned) else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -153,20 +128,14 @@ async fn service_worker() -> Response {
         .into_response()
 }
 
-/// Web app manifest. `start_url` carries the pairing token only when the request proves it already
-/// knows the token, so an unauthenticated LAN client cannot read it from here. iOS home-screen apps
-/// have their own storage, so they need the token in `start_url` to pair on first launch.
-async fn manifest<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Query(q): Query<WsQuery>) -> Response {
-    let start_url = match q.t.as_deref() {
-        Some(t) if token_ok(&st.token, t) => format!("/?t={}", st.token),
-        _ => "/".to_string(),
-    };
+/// Web app manifest, so the page can be installed to the home screen.
+async fn manifest() -> Response {
     let body = serde_json::json!({
         "id": "/",
         "name": "OpenRemote",
         "short_name": "OpenRemote",
         "description": "Use your phone as a touchpad, keyboard and remote for your PC.",
-        "start_url": start_url,
+        "start_url": "/",
         "scope": "/",
         "display": "standalone",
         "orientation": "any",
@@ -184,19 +153,7 @@ async fn manifest<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Que
         .into_response()
 }
 
-#[derive(Deserialize)]
-struct WsQuery {
-    t: Option<String>,
-}
-
-async fn ws_handler<I: Injector + 'static>(
-    State(st): State<Arc<AppState<I>>>,
-    Query(q): Query<WsQuery>,
-    ws: WebSocketUpgrade,
-) -> Response {
-    if st.require_token && !token_ok(&st.token, q.t.as_deref().unwrap_or("")) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+async fn ws_handler<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, ws: WebSocketUpgrade) -> Response {
     ws.max_message_size(MAX_WS_MESSAGE).on_upgrade(move |s| socket_loop(s, st))
 }
 
@@ -231,26 +188,16 @@ async fn socket_loop<I: Injector>(mut socket: WebSocket, st: Arc<AppState<I>>) {
     }
 }
 
-/// Reachable URLs for phones on the LAN, each embedding the pairing token.
-/// The token is appended only when pairing is required (`token` is `Some`).
-pub fn lan_urls(port: u16, token: Option<&str>) -> Vec<String> {
+/// Reachable URLs for phones on the LAN.
+pub fn lan_urls(port: u16) -> Vec<String> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
         .filter_map(|i| match i.addr.ip() {
-            IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_link_local() => Some(match token {
-                Some(t) => format!("http://{ip}:{port}/?t={t}"),
-                None => format!("http://{ip}:{port}/"),
-            }),
+            IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_link_local() => Some(format!("http://{ip}:{port}/")),
             _ => None,
         })
         .collect()
-}
-
-fn qr_svg(url: &str) -> String {
-    qrcode::QrCode::new(url.as_bytes())
-        .map(|c| c.render::<qrcode::render::svg::Color>().min_dimensions(220, 220).build())
-        .unwrap_or_default()
 }
 
 async fn admin<I: Injector + 'static>(
@@ -267,10 +214,10 @@ async fn admin<I: Injector + 'static>(
         return StatusCode::FORBIDDEN.into_response();
     }
     let port = addr_port(&headers).unwrap_or(0);
-    let urls = lan_urls(port, st.require_token.then_some(st.token.as_str()));
+    let urls = lan_urls(port);
     let mut cards = String::new();
     for u in &urls {
-        cards.push_str(&format!("<div class=card>{}<p><a href=\"{u}\">{u}</a></p></div>", qr_svg(u)));
+        cards.push_str(&format!("<div class=card><a href=\"{u}\">{u}</a></div>"));
     }
     if urls.is_empty() {
         cards.push_str("<p>No LAN address found. Connect this PC to a network.</p>");
@@ -279,15 +226,11 @@ async fn admin<I: Injector + 'static>(
         "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>\
 <title>OpenRemote admin</title>\
 <style>body{{font:16px system-ui;background:#111;color:#eee;max-width:720px;margin:2rem auto;padding:0 1rem}}\
-.card{{background:#1c1c1e;border-radius:12px;padding:1rem;margin:1rem 0;text-align:center}}\
-svg{{background:#fff;padding:8px;border-radius:8px}}a{{color:#6cf;word-break:break-all}}</style>\
-<h1>OpenRemote</h1><p>Host: <b>{}</b>. Scan a code with your phone (same Wi-Fi). {}</p>{cards}",
-        st.hostname,
-        if st.require_token {
-            "Anyone with the link can control this PC; plain HTTP is not encrypted."
-        } else {
-            "Pairing is OFF: anyone on your network can control this PC (start with --require-token to change that)."
-        }
+.card{{background:#1c1c1e;border-radius:12px;padding:1rem;margin:1rem 0;text-align:center;font-size:1.2rem}}\
+a{{color:#6cf;word-break:break-all}}</style>\
+<h1>OpenRemote</h1><p>Host: <b>{}</b>. Open one of these addresses in your phone's browser (same Wi-Fi).</p>{cards}\
+<p>There is no pairing yet: anyone on your network can control this PC, and plain HTTP is not encrypted.</p>",
+        st.hostname
     ))
     .into_response()
 }

@@ -1,6 +1,5 @@
-//! Persistent settings: pairing token and port, stored as JSON under the user's config dir.
+//! Persistent settings (the listen port), stored as JSON under the user's config dir.
 
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{fs, io};
@@ -9,23 +8,12 @@ pub const DEFAULT_PORT: u16 = 1990;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
-    pub token: String,
     #[serde(default = "default_port")]
     pub port: u16,
-    /// Pairing is OFF by default: anyone who can reach the port may connect. Turn on with
-    /// `--require-token` (the token and QR flow stay intact).
-    #[serde(default)]
-    pub require_token: bool,
 }
 
 fn default_port() -> u16 {
     DEFAULT_PORT
-}
-
-pub fn new_token() -> String {
-    let mut b = [0u8; 16];
-    rand::thread_rng().fill_bytes(&mut b);
-    b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
 fn config_dir() -> PathBuf {
@@ -42,17 +30,15 @@ pub fn path() -> PathBuf {
 }
 
 impl Settings {
-    /// Load settings, creating the file with a fresh token on first run.
+    /// Load settings, creating the file with defaults on first run. Fields from older versions
+    /// (for example a pairing token) are ignored and dropped on the next save.
     pub fn load_or_create() -> io::Result<Self> {
-        let p = path();
-        if let Ok(text) = fs::read_to_string(&p) {
+        if let Ok(text) = fs::read_to_string(path()) {
             if let Ok(s) = serde_json::from_str::<Settings>(&text) {
-                if s.token.len() >= 16 {
-                    return Ok(s);
-                }
+                return Ok(s);
             }
         }
-        let s = Settings { token: new_token(), port: DEFAULT_PORT, require_token: false };
+        let s = Settings { port: DEFAULT_PORT };
         s.save()?;
         Ok(s)
     }
@@ -71,10 +57,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tokens_are_unique_hex() {
-        let (a, b) = (new_token(), new_token());
-        assert_eq!(a.len(), 32);
-        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
-        assert_ne!(a, b);
+    fn old_files_with_a_token_still_load() {
+        let s: Settings = serde_json::from_str(r#"{"token":"0123456789abcdef","port":2000,"require_token":true}"#).unwrap();
+        assert_eq!(s.port, 2000);
+        let d: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(d.port, DEFAULT_PORT);
     }
 }

@@ -62,7 +62,7 @@ mod imp {
     /// Show the tray icon and run the Win32 message loop on this thread until the process exits.
     pub fn run_tray(admin_url: String) -> Result<(), String> {
         let icon = Icon::from_rgba(TRAY_ICON_RGBA.to_vec(), 32, 32).map_err(|e| e.to_string())?;
-        let show = MenuItem::new("Show QR code", true, None);
+        let show = MenuItem::new("Show phone link", true, None);
         let quit = MenuItem::new("Quit", true, None);
         let menu = Menu::new();
         menu.append_items(&[&show, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;

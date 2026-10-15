@@ -1,10 +1,9 @@
 <div id="app">
   <header id="top">
-    <button id="chip" aria-label="Select computer">
+    <div id="chip" role="status">
       <span class="dot wait" id="dot"></span>
       <span class="txt"><b id="hostname">OpenRemote</b><small id="status">Connecting...</small></span>
-      <svg class="i sm"><use href="#i-right"/></svg>
-    </button>
+    </div>
     <button class="roundbtn" id="help" aria-label="Gesture help"><svg class="i"><use href="#i-help"/></svg></button>
   </header>
 
@@ -139,7 +138,6 @@
         <button class="tile" data-open="clip"><span class="ic"><svg class="i"><use href="#i-clipboard"/></svg></span><span><b>Clipboard</b><small>Text and images</small></span></button>
         <button class="tile" data-open="power"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Power</b><small>Shut down, restart, lock</small></span></button>
         <button class="tile" data-open="settings"><span class="ic"><svg class="i"><use href="#i-settings"/></svg></span><span><b>Settings</b><small>Theme, speed, install</small></span></button>
-        <button class="tile" data-open="computers"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Computers</b><small>Switch or add a PC</small></span></button>
       </div>
     </div>
 
@@ -258,16 +256,6 @@
         <div class="srow stack"><div style="display:flex;justify-content:space-between;align-items:center"><span>Install as app</span><button class="btn" id="installbtn" hidden>Install</button></div><div class="hint" id="installhelp"></div></div>
         <div class="srow"><span>Gesture help</span><button class="btn ghost" id="showhelp">Show</button></div>
       </div>
-    </div>
-
-    <div class="sh-view" id="v-computers">
-      <div class="group" id="complist"></div>
-      <div class="glabel">Add a computer</div>
-      <form id="addform" style="display:flex;gap:8px">
-        <input class="field" id="addin" placeholder="Paste the link from the PC's admin page" autocomplete="off" spellcheck="false">
-        <button class="btn" type="submit">Add</button>
-      </form>
-      <p class="hint" id="pickmsg" style="margin-top:10px"></p>
     </div>
 
   </div>

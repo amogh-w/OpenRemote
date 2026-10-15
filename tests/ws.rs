@@ -9,7 +9,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 
-const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const ICON_KEY: &str = "0123456789abcdef";
 
 #[derive(Default)]
@@ -68,15 +67,9 @@ impl Injector for Handle {
 }
 
 async fn start() -> (u16, Arc<Rec>) {
-    start_with(true).await
-}
-
-async fn start_with(require_token: bool) -> (u16, Arc<Rec>) {
     let rec = Arc::new(Rec::default());
     let state = Arc::new(AppState {
         dispatcher: Dispatcher::new(Handle(rec.clone())),
-        token: TOKEN.into(),
-        require_token,
         hostname: "TEST-PC".into(),
         verbose: true,
     });
@@ -153,18 +146,9 @@ async fn wait_for(rec: &Rec, n: usize) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn rejects_missing_and_wrong_token() {
-    let (port, _) = start().await;
-    for url in [format!("ws://127.0.0.1:{port}/ws"), format!("ws://127.0.0.1:{port}/ws?t=nope")] {
-        let err = tokio_tungstenite::connect_async(url).await.unwrap_err().to_string();
-        assert!(err.contains("401"), "expected 401, got {err}");
-    }
-}
-
-#[tokio::test]
-async fn authenticated_client_drives_input() {
+async fn client_drives_input() {
     let (port, rec) = start().await;
-    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws?t={TOKEN}")).await.unwrap();
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
 
     let hello = ws.next().await.unwrap().unwrap().into_text().unwrap();
     assert!(hello.contains(r#""t":"hello""#) && hello.contains("TEST-PC"));
@@ -209,7 +193,7 @@ async fn serves_frontend_and_loopback_admin() {
 
     let admin = http_get(port, "/admin").await;
     assert!(admin.starts_with("HTTP/1.1 200"), "{}", &admin[..60.min(admin.len())]);
-    assert!(admin.contains("TEST-PC"));
+    assert!(admin.contains("TEST-PC") && !admin.contains("<svg"), "no QR code any more");
 }
 
 #[tokio::test]
@@ -223,20 +207,11 @@ async fn admin_rejects_foreign_host_header() {
 }
 
 #[tokio::test]
-async fn manifest_reveals_token_only_to_holders() {
+async fn manifest_makes_the_page_installable() {
     let (port, _) = start().await;
-
-    let anon = http_get(port, "/manifest.webmanifest").await;
-    assert!(anon.starts_with("HTTP/1.1 200") && anon.contains("application/manifest+json"));
-    assert!(anon.contains(r#""start_url":"/""#), "{anon}");
-    assert!(!anon.contains(TOKEN), "anonymous manifest must not leak the token");
-
-    let wrong = http_get(port, "/manifest.webmanifest?t=nope").await;
-    assert!(wrong.contains(r#""start_url":"/""#) && !wrong.contains(TOKEN));
-
-    let ok = http_get(port, &format!("/manifest.webmanifest?t={TOKEN}")).await;
-    assert!(ok.contains(&format!(r#""start_url":"/?t={TOKEN}""#)), "{ok}");
-    assert!(ok.contains(r#""display":"standalone""#) && ok.contains("/icon-512.png"));
+    let m = http_get(port, "/manifest.webmanifest").await;
+    assert!(m.starts_with("HTTP/1.1 200") && m.contains("application/manifest+json"));
+    assert!(m.contains(r#""start_url":"/""#) && m.contains(r#""display":"standalone""#) && m.contains("/icon-512.png"), "{m}");
 }
 
 #[tokio::test]
@@ -260,22 +235,22 @@ async fn pwa_assets_are_served() {
 }
 
 #[tokio::test]
-async fn open_mode_accepts_connections_without_token() {
-    let (port, rec) = start_with(false).await;
+async fn connects_without_any_credentials() {
+    let (port, rec) = start().await;
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
     let hello = ws.next().await.unwrap().unwrap().into_text().unwrap();
     assert!(hello.contains("hello"));
     ws.send(Message::Text(r#"{"t":"move","dx":1,"dy":2}"#.into())).await.unwrap();
     assert_eq!(wait_for(&rec, 1).await, ["move 1 2"]);
 
-    // the admin page must not advertise a token in this mode
+    // the admin page lists plain links only
     let admin = http_get(port, "/admin").await;
-    assert!(admin.starts_with("HTTP/1.1 200") && !admin.contains("?t=") && admin.contains("Pairing is OFF"));
+    assert!(admin.starts_with("HTTP/1.1 200") && !admin.contains("?t="));
 }
 
 #[tokio::test]
 async fn window_switcher_and_launcher_over_websocket() {
-    let (port, rec) = start_with(false).await;
+    let (port, rec) = start().await;
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
     ws.next().await.unwrap().unwrap(); // hello
 
@@ -297,7 +272,7 @@ async fn window_switcher_and_launcher_over_websocket() {
 
 #[tokio::test]
 async fn icon_route_serves_only_issued_keys() {
-    let (port, _) = start_with(false).await;
+    let (port, _) = start().await;
     let ok = http_get(port, &format!("/icon/{ICON_KEY}.png")).await;
     assert!(ok.starts_with("HTTP/1.1 200") && ok.to_lowercase().contains("content-type: image/png"), "{ok}");
     assert!(ok.contains("PNG-fake"));
@@ -308,17 +283,8 @@ async fn icon_route_serves_only_issued_keys() {
 }
 
 #[tokio::test]
-async fn icon_route_needs_token_when_pairing_is_on() {
-    let (port, _) = start().await; // require_token = true
-    let no = http_get(port, &format!("/icon/{ICON_KEY}.png")).await;
-    assert!(no.starts_with("HTTP/1.1 401"), "{}", &no[..30.min(no.len())]);
-    let yes = http_get(port, &format!("/icon/{ICON_KEY}.png?t={TOKEN}")).await;
-    assert!(yes.starts_with("HTTP/1.1 200"));
-}
-
-#[tokio::test]
 async fn image_upload_reaches_the_clipboard() {
-    let (port, rec) = start_with(false).await;
+    let (port, rec) = start().await;
     let png = tiny_png(4, 3);
     let r = http_post(port, "/clip/image", "image/png", &png).await;
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
@@ -328,7 +294,7 @@ async fn image_upload_reaches_the_clipboard() {
 
 #[tokio::test]
 async fn image_upload_rejects_bad_input() {
-    let (port, rec) = start_with(false).await;
+    let (port, rec) = start().await;
     let png = tiny_png(2, 2);
     let wrong_type = http_post(port, "/clip/image", "text/plain", &png).await;
     assert!(wrong_type.starts_with("HTTP/1.1 415"), "{wrong_type}");
@@ -348,26 +314,15 @@ async fn image_upload_rejects_bad_input() {
 
 #[tokio::test]
 async fn image_download_serves_the_pc_clipboard() {
-    let (port, _) = start_with(false).await;
+    let (port, _) = start().await;
     let r = http_get(port, "/clip/image.png").await;
     assert!(r.starts_with("HTTP/1.1 200") && r.to_lowercase().contains("content-type: image/png"), "{r}");
     assert!(r.to_lowercase().contains("cache-control: no-store") && r.contains("PNG-from-pc"));
 }
 
 #[tokio::test]
-async fn clipboard_image_routes_need_the_token_when_pairing_is_on() {
-    let (port, rec) = start().await; // require_token = true
-    let png = tiny_png(2, 2);
-    assert!(http_get(port, "/clip/image.png").await.starts_with("HTTP/1.1 401"));
-    assert!(http_post(port, "/clip/image", "image/png", &png).await.starts_with("HTTP/1.1 401"));
-    assert!(http_get(port, &format!("/clip/image.png?t={TOKEN}")).await.starts_with("HTTP/1.1 200"));
-    assert!(http_post(port, &format!("/clip/image?t={TOKEN}"), "image/png", &png).await.starts_with("HTTP/1.1 200"));
-    assert_eq!(wait_for(&rec, 1).await.len(), 1, "only the authorised upload reached the clipboard");
-}
-
-#[tokio::test]
 async fn clipboard_text_roundtrip_reports_success_and_failure() {
-    let (port, rec) = start_with(false).await;
+    let (port, rec) = start().await;
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
     ws.next().await.unwrap().unwrap(); // hello
 

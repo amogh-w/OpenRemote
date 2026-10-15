@@ -17,10 +17,10 @@ frontend on the phone, a small JSON protocol in between.
 | 8 | Foreground-app push | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` and broadcast `{t:"foreground", title, exe}`. |
 | 9 | Clipboard sync: text and images (**done**) | `arboard` with retries while another program holds the clipboard. Images travel as PNG over HTTP (`POST /clip/image`, `GET /clip/image.png`), validated by dimensions before decoding; the phone converts photos with a canvas. Copies are acknowledged (`clip.ack`). |
 | 10 | Connected-device list | In-memory list (name, IP, last seen) shown in the admin page. |
-| 11 | Pairing | Optional random 128-bit token carried in the QR link. Off by default for now. |
-| 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), the QR code and manual IP entry. |
-| 13 | QR code | The admin page renders it (`qrcode` crate, SVG). |
-| 14 | Tray icon and menu (**done**: Show QR code, Quit) | `tray-icon` crate. The server runs on a worker thread while the main thread runs the Win32 message loop; the release build uses the GUI subsystem so there is no console window. |
+| 11 | Pairing (**removed, to be redesigned**) | A first token and QR version was removed because it was not good enough. For now there is no authentication. A new design (QR or short code, per-device access, revocation) is planned. |
+| 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), and manual IP entry (a QR code comes back with pairing). |
+| 13 | QR code | Removed along with the old pairing; returns with the new pairing design. |
+| 14 | Tray icon and menu (**done**: Show phone link, Quit) | `tray-icon` crate. The server runs on a worker thread while the main thread runs the Win32 message loop; the release build uses the GUI subsystem so there is no console window. |
 | 15 | Settings UI | No native GUI. The admin page on `127.0.0.1` plus a settings file under `%APPDATA%`. |
 | 16 | Launch on startup | `HKCU\...\Run` value (no admin rights needed). |
 | 17 | Works on UAC prompts and the lock screen | Later: the same exe in a `--service` mode that spawns a `--helper` in the active session. |
@@ -34,16 +34,15 @@ One Rust binary:
 
 ```
 frontend (any)  <--- WebSocket JSON + HTTP --->  server (axum + tokio)
-                                                   |- optional token check
                                                    |- dispatcher -> platform layer (Windows)
                                                    |     input (SendInput) | windows (EnumWindows, icons)
                                                    |     clipboard | power | foreground hook | autostart
-                                                   |- admin page (127.0.0.1 only): QR, settings, devices
+                                                   |- admin page (127.0.0.1 only): phone links, settings, devices
                                                    |- embedded web frontend (PWA)
                                                    `- mDNS announcer, tray icon (planned)
 ```
 
-One port (default 1990): `GET /ws` for control, `GET /` serves the web app, `/admin` and the QR are
+One port (default 1990): `GET /ws` for control, `GET /` serves the web app, `/admin` is
 reachable only from loopback.
 
 ### Message protocol
@@ -54,19 +53,19 @@ animation frame.
 
 ### Security model
 
-- Optional token on the WebSocket; the admin page is loopback-only and checks the `Host` header.
+- No authentication for now (pairing is planned); the admin page is loopback-only and checks the `Host` header.
 - `open` accepts only `http` and `https`; text, scroll and move sizes are clamped.
-- Plain HTTP on the LAN exposes input and any token to sniffers. Later: a self-signed TLS certificate
-  (`rcgen` + `rustls`) with its fingerprint embedded in the QR link.
+- Plain HTTP on the LAN exposes input to anyone on the network and to sniffers. Later: pairing, and a self-signed TLS
+  certificate (`rcgen` + `rustls`) whose fingerprint is shown during pairing.
 
 ### Crates
 
-`axum`, `tokio`, `serde`/`serde_json`, `qrcode`, `if-addrs`, `arboard`, `png`, `tray-icon`, `windows-sys`; planned:
+`axum`, `tokio`, `serde`/`serde_json`, `if-addrs`, `arboard`, `png`, `tray-icon`, `windows-sys`; planned:
 `mdns-sd`, `rust-embed`, `rcgen`/`rustls`.
 
 ## Milestones
 
-1. **Core** (done): WebSocket server, mouse, keyboard, text, QR admin page, web app, PWA basics.
+1. **Core** (done): WebSocket server, mouse, keyboard, text, admin page, web app, PWA basics.
 2. **Desktop shell**: tray icon (done), settings page in the admin UI, autostart, mDNS, device list.
 3. **Extras**: app switcher and launcher (done), foreground push, image clipboard.
 4. **Hardening**: service and helper for UAC/lock screen, TLS, thumbnails, installer, update check.

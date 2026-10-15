@@ -16,9 +16,6 @@ openremote - control this PC from a phone browser
 USAGE: openremote [OPTIONS]
   --port <PORT>     listen port (default from settings, 1990)
   --hostname <NAME> name shown in the admin page and app (default: computer name)
-  --require-token   turn pairing ON (clients need the token / QR link); saved
-  --no-require-token  turn pairing OFF again (the default); saved
-  --regen-token     create a new pairing token (invalidates old QR codes)
   --no-tray         no tray icon; run the server in the foreground
   -v, --verbose     log ignored messages
   -h, --help";
@@ -39,14 +36,6 @@ fn main() {
                 save = true;
             }
             "--hostname" => hostname = args.next().unwrap_or_else(|| die("--hostname needs a value")),
-            "--require-token" | "--no-require-token" => {
-                st.require_token = a == "--require-token";
-                save = true;
-            }
-            "--regen-token" => {
-                st.token = settings::new_token();
-                save = true;
-            }
             "--no-tray" => tray = false,
             "-v" | "--verbose" => verbose = true,
             "-h" | "--help" => {
@@ -69,19 +58,15 @@ fn main() {
     });
 
     let admin_url = format!("http://127.0.0.1:{}/admin", st.port);
-    println!("Admin page (QR code): {admin_url}");
-    for url in web::lan_urls(st.port, st.require_token.then_some(st.token.as_str())) {
-        println!("Phone link:           {url}");
+    println!("Admin page:  {admin_url}");
+    for url in web::lan_urls(st.port) {
+        println!("Phone link:  {url}");
     }
-    if !st.require_token {
-        println!("Pairing is OFF: anyone on your network can control this PC (--require-token to enable).");
-    }
+    println!("There is no pairing yet: anyone on your network can control this PC.");
     println!("Settings file: {}", settings::path().display());
 
     let state = Arc::new(AppState {
         dispatcher: Dispatcher::new(PlatformInjector::default()),
-        token: st.token,
-        require_token: st.require_token,
         hostname,
         verbose,
     });

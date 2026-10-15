@@ -57,33 +57,16 @@
     clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), o.ms || 2200);
   }
 
-  // ============================================================ saved computers
-  let comps = store.get('or_comps', []);
-  let cur = store.get('or_cur', 0);
-  const saveC = () => { store.set('or_comps', comps); store.set('or_cur', cur); };
-  function addComputer(base, token, name, select) {
-    let i = comps.findIndex((c) => c.base === base);
-    if (i < 0) { comps.push({ base, token, name: name || base.replace(/^https?:\/\//, '') }); i = comps.length - 1; }
-    else { comps[i].token = token; if (name) comps[i].name = name; }
-    if (select) cur = i;
-    saveC();
-  }
-  function parseLink(text) {
-    try { const u = new URL(text.trim()); const t = u.searchParams.get('t'); if (t && /^https?:$/.test(u.protocol)) return { base: u.origin, token: t }; } catch {}
-    return null;
-  }
-  const qs = new URLSearchParams(location.search);
-  if (qs.get('t')) { addComputer(location.origin, qs.get('t'), null, true); history.replaceState(null, '', location.pathname); }
-  // Pairing is optional: opened straight from the PC (no token in the link), just connect to this server.
-  if (!comps.some((c) => c.base === location.origin)) addComputer(location.origin, '', null, true);
-  if (cur >= comps.length) cur = 0;
+  // ============================================================ the PC
+  // The page is served by the PC it controls, so it always connects straight back to its own origin.
+  const pc = { base: location.origin, name: location.hostname };
+  try { localStorage.removeItem('or_comps'); localStorage.removeItem('or_cur'); } catch {}   // from older versions
 
   // ============================================================ PWA
   (function pwa() {
-    const c = comps[cur];
     const l = document.createElement('link');
     l.rel = 'manifest';
-    l.href = '/manifest.webmanifest' + (c && c.base === location.origin && c.token ? '?t=' + encodeURIComponent(c.token) : '');
+    l.href = '/manifest.webmanifest';
     document.head.appendChild(l);
     if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
     const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
@@ -103,20 +86,18 @@
     const d = $('#dot'); d.classList.toggle('on', online); d.classList.toggle('wait', state === 'wait');
     $('#status').textContent = online ? (rtt != null ? 'Connected · ' + rtt + ' ms' : 'Connected') : state === 'wait' ? 'Connecting...' : 'Offline · retrying';
   }
-  const paintName = () => { $('#hostname').textContent = comps[cur] ? comps[cur].name : 'No computer'; };
+  const paintName = () => { $('#hostname').textContent = pc.name; };
   function connect() {
     clearTimeout(timer);
     if (ws) { ws.onclose = null; ws.onmessage = null; try { ws.close(); } catch {} ws = null; }
     rtt = null; setConn('wait'); paintName();
-    const c = comps[cur];
-    if (!c) return;
-    const sock = new WebSocket(c.base.replace(/^http/, 'ws') + '/ws' + (c.token ? '?t=' + encodeURIComponent(c.token) : ''));
+    const sock = new WebSocket(pc.base.replace(/^http/, 'ws') + '/ws');
     ws = sock;
     sock.onopen = () => { retry = 0; };
     sock.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
       if (m.t === 'hello') {
-        c.name = m.host || c.name; saveC(); paintName(); setConn('on');
+        pc.name = m.host || pc.name; paintName(); setConn('on');
         if (everOnline && wasLost) toast('Reconnected', { icon: 'wifi' });
         everOnline = true; wasLost = false; warned = false; appsRequested = false;
         if (page === 'apps') refreshApps();
@@ -363,8 +344,7 @@
   // ============================================================ apps: windows + launcher
   let appsMode = 'open', winItems = [], appItems = [], winLoaded = false, appsLoaded = false, appsRequested = false;
   const iconUrl = (key) => {
-    const c = comps[cur];
-    return key && c ? c.base + '/icon/' + key + '.png' + (c.token ? '?t=' + encodeURIComponent(c.token) : '') : '';
+    return key ? '/icon/' + key + '.png' : '';
   };
   function iconBox(key) {
     const s = document.createElement('span'); s.className = 'aic';
@@ -503,7 +483,6 @@
   };
   // ---- clipboard: one box to send (text or a photo), one button to fetch
   const clipText = $('#cliptext'), say = (msg, kind) => { const el = $('#clipmsg'); el.textContent = msg; el.classList.toggle('bad', kind === 'bad'); el.classList.toggle('ok', kind === 'ok'); };
-  const sameOrigin = () => !!comps[cur] && comps[cur].base === location.origin;
   const fmtBytes = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
   const MAX_SIDE_PX = 2560, MAX_UPLOAD = 24 * 1024 * 1024;
   let photo = null, prevUrl = '';   // the PNG waiting to be sent
@@ -556,11 +535,9 @@
   $('#clipsend').onclick = async () => {
     if (!online) return say('Not connected to the PC.', 'bad');
     if (photo) {
-      if (!sameOrigin()) return say('To send photos, open this page from the PC itself (its own address and port).', 'bad');
       say('Sending ' + fmtBytes(photo.size) + '...');
       try {
-        const c = comps[cur];
-        const r = await fetch('/clip/image' + (c.token ? '?t=' + encodeURIComponent(c.token) : ''), { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: photo });
+        const r = await fetch('/clip/image', { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: photo });
         const j = await r.json().catch(() => ({}));
         if (!r.ok || !j.ok) throw new Error(j.error || 'the PC answered ' + r.status);
         say('Sent. The photo is on the PC clipboard.', 'ok'); toast('Photo copied on the PC', { icon: 'circle-check' }); buzz(); setPhoto(null);
@@ -580,16 +557,17 @@
     say('Asking the PC...'); send({ t: 'clip.get' });
   };
   function gotClip(m) {
-    const text = m.text || '', img = m.image, c = comps[cur];
+    const img = m.image, text = (m.text || '').trim() ? m.text : '';   // whitespace alone is not worth showing
     $('#pctext').textContent = text;
     const im = $('#imgpc');
     im.hidden = !img;
-    if (img) im.src = c.base + '/clip/image.png?v=' + Date.now() + (c.token ? '&t=' + encodeURIComponent(c.token) : '');
+    if (img) im.src = '/clip/image.png?v=' + Date.now();
     $('#pcres').hidden = !text && !img;
     $('#clipcopy').hidden = !text;
-    if (text && img) say('The PC copied text and an image. Press and hold the image to copy or save it.', 'ok');
+    const dims = img ? img.w + ' x ' + img.h + ' px' : '';
+    if (text && img) say('The PC copied text and an image (' + dims + '). Press and hold the image to copy or save it.', 'ok');
     else if (text) say('Tap Copy text to put it on your phone.', 'ok');
-    else if (img) say('Press and hold the image, then choose Copy or Add to Photos.', 'ok');
+    else if (img) say('The PC copied an image (' + dims + '). Press and hold it, then choose Copy or Add to Photos.', 'ok');
     else say('The PC clipboard is empty.', 'bad');
   }
   $('#imgpc').onerror = () => say('Could not load the image from the PC.', 'bad');
@@ -620,43 +598,14 @@
     };
   });
 
-  // ============================================================ computers
-  const compList = $('#complist');
-  function renderList() {
-    compList.textContent = '';
-    comps.forEach((c, i) => {
-      const row = document.createElement('button'); row.className = 'comp' + (i === cur ? ' cur' : '');
-      const nm = document.createElement('span'); nm.className = 'nm';
-      const b = document.createElement('b'); b.textContent = c.name; const s = document.createElement('small'); s.textContent = c.base.replace(/^https?:\/\//, '');
-      nm.append(b, s);
-      const x = document.createElement('span'); x.className = 'iconbtn danger'; x.setAttribute('role', 'button'); x.setAttribute('aria-label', 'Remove'); x.appendChild(svg('x'));
-      const ck = svg('check', 'ck');
-      row.append(svg('monitor'), nm, ck, x);
-      row.onclick = (e) => {
-        if (e.target.closest('.iconbtn')) { comps.splice(i, 1); if (cur >= comps.length) cur = Math.max(0, comps.length - 1); saveC(); renderList(); connect(); return; }
-        cur = i; saveC(); closeSheet(); connect();
-      };
-      compList.appendChild(row);
-    });
-    $('#pickmsg').textContent = comps.length ? '' : 'No computers yet. Open the admin page on your PC (http://127.0.0.1:1990/admin) and paste the phone link here.';
-  }
-  $('#addform').onsubmit = (e) => {
-    e.preventDefault();
-    const p = parseLink($('#addin').value);
-    if (!p) { $('#pickmsg').textContent = 'That does not look like an OpenRemote link (it must contain ?t=...).'; return; }
-    addComputer(p.base, p.token, null, true); $('#addin').value = ''; closeSheet(); connect();
-  };
-  $('#chip').onclick = () => openSheet('computers');
-
   // ============================================================ bottom sheet
   const sheet = $('#sheet'), scrim = $('#scrim');
-  const TITLES = { more: 'More', browser: 'Browser', keys: 'Special keys', clip: 'Clipboard', power: 'Power', settings: 'Settings', computers: 'Computers' };
+  const TITLES = { more: 'More', browser: 'Browser', keys: 'Special keys', clip: 'Clipboard', power: 'Power', settings: 'Settings' };
   let sheetOpen = false, stack = ['more'];
   function showView(id) {
     $$('.sh-view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + id));
     $('#sh-title').textContent = TITLES[id]; sheet.classList.toggle('deep', stack.length > 1);
     $('.sh-body').scrollTop = 0;
-    if (id === 'computers') renderList();
   }
   function openSheet(id = 'more') {
     stack = id === 'more' ? ['more'] : ['more', id];
@@ -701,6 +650,6 @@
   // ============================================================ start
   paintSettings(); paintMods();
   go(page);
-  if (!comps.length) openSheet('computers'); else connect();
+  connect();
   if (!store.get('or_seen_hint', false) && page === 'pad') setTimeout(showCoach, 700);
 })();
