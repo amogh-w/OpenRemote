@@ -403,8 +403,9 @@
     r.exe.textContent = (w.exe || 'window') + (w.minimized ? ' · minimized' : '');
     el.classList.toggle('fg', !!w.foreground); el.classList.toggle('min', !!w.minimized);
     if (el._key !== w.icon) { const nb = iconBox(w.icon); el.replaceChild(nb, el.firstChild); el._key = w.icon; }
-    r.max.dataset.a = w.minimized ? 'restore' : 'max';
-    setIcon($('svg', r.max), w.minimized ? 'restore' : 'max'); r.max.setAttribute('aria-label', w.minimized ? 'Restore' : 'Maximize');
+    const big = !!(w.minimized || w.maximized);   // the button toggles: maximize, then back to the normal size
+    r.max.dataset.a = big ? 'restore' : 'max';
+    setIcon($('svg', r.max), big ? 'restore' : 'max'); r.max.setAttribute('aria-label', big ? 'Restore' : 'Maximize');
   }
   function renderWins() {
     const box = $('#winlist');

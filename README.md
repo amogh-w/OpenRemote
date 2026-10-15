@@ -145,7 +145,7 @@ JSON text frames on `GET /ws`.
 {"t":"clip.set","text":"..."}               replace PC clipboard text (max 256 KB) -> {"t":"clip.ack","ok":true|false}
 {"t":"clip.get"}                            -> {"t":"clip","text":"...","image":{"w":..,"h":..}|null}
 {"t":"media.get"}                           -> {"t":"media","state":"playing|paused|stopped|none","title":"..","artist":"..","app":"..","pos":s,"dur":s,"art":bool}
-{"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,foreground}]}
+{"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,maximized,foreground}]}
 {"t":"win.act","id":123,"a":"focus|min|max|restore|close"}
 {"t":"app.list"}                            -> {"t":"app.list","items":[{id,name,icon}]}
 {"t":"app.launch","id":"<id from app.list>"}

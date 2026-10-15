@@ -33,7 +33,7 @@ use windows_sys::Win32::UI::Shell::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     BringWindowToTop, DestroyIcon, EnumWindows, GetForegroundWindow, GetIconInfo, GetWindow, GetWindowLongW,
-    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible,
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow, IsWindowVisible, IsZoomed,
     PostMessageW, PrivateExtractIconsW, SetForegroundWindow, ShowWindow, GWL_EXSTYLE, GW_OWNER, HICON, ICONINFO,
     SW_MAXIMIZE, SW_MINIMIZE, SW_RESTORE, SW_SHOWNORMAL, WM_CLOSE, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
@@ -113,7 +113,7 @@ impl Registry {
                 ),
                 None => (String::new(), String::new()),
             };
-            Some(WindowInfo { id: hwnd as usize as u64, title, exe, icon, minimized: IsIconic(hwnd) != 0, foreground })
+            Some(WindowInfo { id: hwnd as usize as u64, title, exe, icon, minimized: IsIconic(hwnd) != 0, maximized: IsZoomed(hwnd) != 0, foreground })
         }
     }
 

@@ -61,6 +61,8 @@ pub struct WindowInfo {
     /// Icon key for `GET /icon/<key>.png`; empty when there is no icon.
     pub icon: String,
     pub minimized: bool,
+    /// Maximized (so the button can toggle back to the normal size).
+    pub maximized: bool,
     pub foreground: bool,
 }
 
@@ -465,7 +467,7 @@ pub mod testing {
             true
         }
         fn windows(&self) -> Vec<WindowInfo> {
-            vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: "0123456789abcdef".into(), minimized: false, foreground: true }]
+            vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: "0123456789abcdef".into(), minimized: false, maximized: false, foreground: true }]
         }
         fn window_action(&self, id: u64, a: WindowAct) {
             self.0.lock().unwrap().push(format!("win {id} {a:?}"));

@@ -36,7 +36,7 @@ impl Injector for Handle {
         c.to_ascii_uppercase() as u8
     }
     fn windows(&self) -> Vec<WindowInfo> {
-        vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: ICON_KEY.into(), minimized: false, foreground: true }]
+        vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: ICON_KEY.into(), minimized: false, maximized: false, foreground: true }]
     }
     fn window_action(&self, id: u64, a: WindowAct) {
         self.0 .0.lock().unwrap().push(format!("win {id} {a:?}"));
