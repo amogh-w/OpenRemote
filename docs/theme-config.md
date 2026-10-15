@@ -1,4 +1,3 @@
-<!-- Fetched from amogh-w/digitalgarden: src/site/styles/theme-config.md (private repo). Reference for the Catppuccin theming used in assets/index.html. -->
 # Theme: Catppuccin (4 variants)
 
 This isn't a hand-rolled theme — it's the [Catppuccin](https://catppuccin.com) palette

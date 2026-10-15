@@ -193,6 +193,13 @@ async fn pwa_assets_are_served() {
     assert!(http_get(port, "/sw.js").await.to_lowercase().contains("service-worker-allowed: /"));
     let index = http_get(port, "/").await;
     assert!(index.contains("apple-touch-icon") && index.contains("apple-mobile-web-app-capable"));
+    // the assembled page: nav, sheet, bundled icons (Lucide attribution), motion preferences
+    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"i-pad\"", "--ctp-mauve"] {
+        assert!(index.contains(needle), "page is missing {needle}");
+    }
+    // a single document: exactly one <style>, one <script> block of app code after the early theme script
+    assert_eq!(index.matches("<style>").count(), 1);
+    assert!(!index.contains("{head}") && !index.contains("{css}"), "unreplaced build placeholder");
 }
 
 #[tokio::test]

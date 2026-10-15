@@ -12,7 +12,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
-const INDEX_HTML: &str = include_str!("../assets/index.html");
+const INDEX_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
 const SW_JS: &str = include_str!("../assets/sw.js");
 const ICON_180: &[u8] = include_bytes!("../assets/icon-180.png");
 const ICON_192: &[u8] = include_bytes!("../assets/icon-192.png");

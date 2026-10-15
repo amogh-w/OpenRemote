@@ -1,0 +1,260 @@
+<div id="app">
+  <header id="top">
+    <button id="chip" aria-label="Select computer">
+      <span class="dot wait" id="dot"></span>
+      <span class="txt"><b id="hostname">OpenRemote</b><small id="status">Connecting...</small></span>
+      <svg class="i sm"><use href="#i-right"/></svg>
+    </button>
+    <button class="roundbtn" id="help" aria-label="Gesture help"><svg class="i"><use href="#i-help"/></svg></button>
+  </header>
+
+  <main id="stage">
+    <!-- PAD -->
+    <section class="page on" id="pg-pad" data-page="pad">
+      <div class="padbox">
+        <div class="pad" id="pad"></div>
+        <div class="gchip"><svg class="i"><use href="#i-pointer"/></svg><span></span></div>
+        <div class="strip" id="strip" aria-label="Scroll"><svg class="i"><use href="#i-up"/></svg><svg class="i mid"><use href="#i-grip"/></svg><svg class="i"><use href="#i-down"/></svg></div>
+        <div class="coach" id="coach">
+          <div class="box">
+            <h3>Touchpad gestures</h3>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-move"/></svg></span><div>Drag<small>Move the pointer</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-pointer"/></svg></span><div>Tap<small>Left click</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-hand"/></svg></span><div>Two-finger tap<small>Right click</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-mouse"/></svg></span><div>Two fingers, drag<small>Scroll (or use the strip on the right)</small></div></div>
+            <div class="row"><span class="ic"><svg class="i"><use href="#i-click"/></svg></span><div>Tap, then hold and drag<small>Drag and drop</small></div></div>
+            <button class="btn" id="coach-ok">Got it</button>
+          </div>
+        </div>
+      </div>
+      <div class="mbtns">
+        <button class="mbtn" data-btn="left"><svg class="i"><use href="#i-click"/></svg>Left click</button>
+        <button class="mbtn" data-btn="middle" aria-label="Middle click"><svg class="i"><use href="#i-mouse"/></svg>Mid</button>
+        <button class="mbtn" data-btn="right"><svg class="i"><use href="#i-click"/></svg>Right click</button>
+      </div>
+      <div class="chips">
+        <button class="chip2" data-key="esc">Esc</button>
+        <button class="chip2" data-key="tab">Tab</button>
+        <button class="chip2" data-mod="ctrl">Ctrl</button>
+        <button class="chip2" data-mod="alt">Alt</button>
+        <button class="chip2" data-mod="shift">Shift</button>
+        <button class="chip2" data-mod="win">Win</button>
+        <button class="chip2" data-key="delete">Del</button>
+      </div>
+    </section>
+
+    <!-- TYPE -->
+    <section class="page" id="pg-type" data-page="type">
+      <div class="type-l">
+        <div class="padbox">
+          <div class="pad" id="pad2"></div>
+          <div class="gchip"><svg class="i"><use href="#i-pointer"/></svg><span></span></div>
+        </div>
+        <div class="mrow">
+          <button class="mbtn" data-btn="left">Left</button>
+          <button class="mbtn" data-btn="right">Right</button>
+        </div>
+      </div>
+      <div class="type-r">
+        <div class="chips">
+          <button class="chip2" data-key="esc">Esc</button>
+          <button class="chip2" data-key="tab">Tab</button>
+          <button class="chip2" data-mod="ctrl">Ctrl</button>
+          <button class="chip2" data-mod="alt">Alt</button>
+          <button class="chip2" data-mod="win">Win</button>
+          <button class="chip2" data-key="delete">Del</button>
+          <button class="chip2" data-key="left" data-repeat aria-label="Left"><svg class="i"><use href="#i-arrow-left"/></svg></button>
+          <button class="chip2" data-key="up" data-repeat aria-label="Up"><svg class="i"><use href="#i-arrow-up"/></svg></button>
+          <button class="chip2" data-key="down" data-repeat aria-label="Down"><svg class="i"><use href="#i-arrow-down"/></svg></button>
+          <button class="chip2" data-key="right" data-repeat aria-label="Right"><svg class="i"><use href="#i-arrow-right"/></svg></button>
+        </div>
+        <div class="kb" id="kbd"></div>
+      </div>
+    </section>
+
+    <!-- APPS -->
+    <section class="page" id="pg-apps" data-page="apps">
+      <div class="seg2" id="apps-seg" style="--n:2"><span class="thumb"></span><button data-v="open" class="on">Windows</button><button data-v="all">Apps</button></div>
+      <div class="search" id="searchbox" hidden>
+        <svg class="i sm"><use href="#i-search"/></svg>
+        <input id="appsearch" type="search" placeholder="Search apps" autocapitalize="off" autocomplete="off" spellcheck="false">
+        <button class="iconbtn" id="searchclear" aria-label="Clear search"><svg class="i"><use href="#i-x"/></svg></button>
+      </div>
+      <div class="apps-body" id="appsbody">
+        <div id="winlist"></div>
+        <div id="applist" hidden></div>
+      </div>
+    </section>
+
+    <!-- MEDIA -->
+    <section class="page" id="pg-media" data-page="media">
+      <div class="dial">
+        <button class="d t" data-key="volume_up" data-repeat aria-label="Volume up"><svg class="i"><use href="#i-plus"/></svg></button>
+        <button class="d b" data-key="volume_down" data-repeat aria-label="Volume down"><svg class="i"><use href="#i-minus"/></svg></button>
+        <button class="d l" data-key="media_prev_track" aria-label="Previous track"><svg class="i"><use href="#i-prev"/></svg></button>
+        <button class="d r" data-key="media_next_track" aria-label="Next track"><svg class="i"><use href="#i-next"/></svg></button>
+        <button class="d c" data-key="media_play_pause" aria-label="Play or pause"><svg class="i"><use href="#i-play"/></svg></button>
+      </div>
+      <div class="pills">
+        <button class="pill" data-key="volume_mute"><svg class="i"><use href="#i-mute"/></svg>Mute</button>
+        <button class="pill" data-key="f11"><svg class="i"><use href="#i-fullscreen"/></svg>Fullscreen</button>
+        <button class="pill danger" data-key="alt+f4" data-confirm="Tap again to close"><svg class="i"><use href="#i-x"/></svg><span>Close window</span></button>
+      </div>
+      <div class="card pres">
+        <h4>Presentation</h4>
+        <div class="grid">
+          <button class="key" data-key="left" data-repeat><svg class="i"><use href="#i-arrow-left"/></svg>Prev</button>
+          <button class="key" data-key="f5"><svg class="i"><use href="#i-presentation"/></svg>Start</button>
+          <button class="key" data-key="esc"><svg class="i"><use href="#i-x"/></svg>Exit</button>
+          <button class="key" data-key="right" data-repeat><svg class="i"><use href="#i-arrow-right"/></svg>Next</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav id="nav" aria-label="Sections">
+    <span id="nav-ind"></span>
+    <button data-go="pad" class="on"><svg class="i"><use href="#i-pad"/></svg><span>Pad</span></button>
+    <button data-go="type"><svg class="i"><use href="#i-type"/></svg><span>Type</span></button>
+    <button data-go="apps"><svg class="i"><use href="#i-apps"/></svg><span>Apps</span></button>
+    <button data-go="media"><svg class="i"><use href="#i-media"/></svg><span>Media</span></button>
+    <button data-more><svg class="i"><use href="#i-more"/></svg><span>More</span></button>
+  </nav>
+</div>
+
+<div id="scrim"></div>
+<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">
+  <div class="sh-grab" id="sh-grab"></div>
+  <div class="sh-head" id="sh-head">
+    <button class="iconbtn" id="sh-back" aria-label="Back"><svg class="i"><use href="#i-arrow-left"/></svg></button>
+    <h2 id="sh-title">More</h2>
+    <button class="iconbtn" id="sh-close" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+  </div>
+  <div class="sh-body">
+
+    <div class="sh-view on" id="v-more">
+      <div class="tiles">
+        <button class="tile" data-open="browser"><span class="ic"><svg class="i"><use href="#i-browser"/></svg></span><span><b>Browser</b><small>Tabs, zoom, open a link</small></span></button>
+        <button class="tile" data-open="keys"><span class="ic"><svg class="i"><use href="#i-command"/></svg></span><span><b>Special keys</b><small>Fn row, numpad, modifiers</small></span></button>
+        <button class="tile" data-open="clip"><span class="ic"><svg class="i"><use href="#i-clipboard"/></svg></span><span><b>Clipboard</b><small>Send and receive text</small></span></button>
+        <button class="tile" data-open="power"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Power</b><small>Shut down, restart, lock</small></span></button>
+        <button class="tile" data-open="settings"><span class="ic"><svg class="i"><use href="#i-settings"/></svg></span><span><b>Settings</b><small>Theme, speed, install</small></span></button>
+        <button class="tile" data-open="computers"><span class="ic"><svg class="i"><use href="#i-monitor"/></svg></span><span><b>Computers</b><small>Switch or add a PC</small></span></button>
+      </div>
+    </div>
+
+    <div class="sh-view" id="v-browser">
+      <div class="grid4">
+        <button class="key" data-key="alt+left"><svg class="i"><use href="#i-arrow-left"/></svg>Back</button>
+        <button class="key" data-key="alt+right"><svg class="i"><use href="#i-arrow-right"/></svg>Forward</button>
+        <button class="key" data-key="f5"><svg class="i"><use href="#i-refresh"/></svg>Reload</button>
+        <button class="key" data-key="alt+home"><svg class="i"><use href="#i-home"/></svg>Home</button>
+        <button class="key" data-key="ctrl+t"><svg class="i"><use href="#i-plus"/></svg>New tab</button>
+        <button class="key" data-key="ctrl+w"><svg class="i"><use href="#i-x"/></svg>Close tab</button>
+        <button class="key" data-key="ctrl+shift+t"><svg class="i"><use href="#i-restore"/></svg>Reopen</button>
+        <button class="key" data-key="ctrl+l"><svg class="i"><use href="#i-globe"/></svg>Address</button>
+        <button class="key" data-key="ctrl+="><svg class="i"><use href="#i-plus"/></svg>Zoom in</button>
+        <button class="key" data-key="ctrl+-"><svg class="i"><use href="#i-minus"/></svg>Zoom out</button>
+        <button class="key" data-key="ctrl+0"><svg class="i"><use href="#i-max"/></svg>Reset</button>
+        <button class="key" data-key="ctrl+f"><svg class="i"><use href="#i-search"/></svg>Find</button>
+      </div>
+      <div class="glabel">Open a link on the computer</div>
+      <form class="urlrow" id="urlform">
+        <input class="field" id="urlin" type="url" inputmode="url" placeholder="https://" autocapitalize="off" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit"><svg class="i sm"><use href="#i-external"/></svg>Open</button>
+      </form>
+    </div>
+
+    <div class="sh-view" id="v-keys">
+      <div class="keys2">
+        <div>
+          <div class="kr"><button class="key fn" data-mod="shift">Shift</button><button class="key fn" data-mod="ctrl">Ctrl</button><button class="key fn" data-mod="win">Win</button><button class="key fn" data-mod="alt">Alt</button></div>
+          <div class="kr"><button class="key fn" data-key="esc">Esc</button><button class="key fn" data-key="tab">Tab</button><button class="key fn" data-key="insert">Ins</button><button class="key fn" data-key="delete">Del</button></div>
+          <div class="kr"><button class="key fn" data-key="home">Home</button><button class="key fn" data-key="end">End</button><button class="key fn" data-key="pageup">PgUp</button><button class="key fn" data-key="pagedown">PgDn</button></div>
+          <div class="kr"><button class="key" data-key="left" data-repeat aria-label="Left"><svg class="i"><use href="#i-arrow-left"/></svg></button><button class="key" data-key="up" data-repeat aria-label="Up"><svg class="i"><use href="#i-arrow-up"/></svg></button><button class="key" data-key="down" data-repeat aria-label="Down"><svg class="i"><use href="#i-arrow-down"/></svg></button><button class="key" data-key="right" data-repeat aria-label="Right"><svg class="i"><use href="#i-arrow-right"/></svg></button></div>
+        </div>
+        <div>
+          <div class="kr"><button class="key" data-t="7">7</button><button class="key" data-t="8">8</button><button class="key" data-t="9">9</button><button class="key fn" data-t="*">*</button></div>
+          <div class="kr"><button class="key" data-t="4">4</button><button class="key" data-t="5">5</button><button class="key" data-t="6">6</button><button class="key fn" data-t="-">-</button></div>
+          <div class="kr"><button class="key" data-t="1">1</button><button class="key" data-t="2">2</button><button class="key" data-t="3">3</button><button class="key fn" data-t="+">+</button></div>
+          <div class="kr"><button class="key" data-t="0">0</button><button class="key" data-t=".">.</button><button class="key fn" data-t="/">/</button><button class="key go" data-key="enter" aria-label="Enter"><svg class="i"><use href="#i-enter"/></svg></button></div>
+        </div>
+      </div>
+      <div class="glabel">Function keys</div>
+      <div class="frow" id="frow"></div>
+    </div>
+
+    <div class="sh-view" id="v-clip">
+      <div class="clipbtns">
+        <button id="clipto"><svg class="i"><use href="#i-phone"/></svg>Send to computer</button>
+        <button id="clipfrom"><svg class="i"><use href="#i-monitor"/></svg>Get from computer</button>
+      </div>
+      <textarea class="field" id="cliptext" placeholder="Type or paste text to send, or see what the computer copied" spellcheck="false"></textarea>
+      <p class="hint" id="clipmsg"></p>
+      <button class="btn" id="clipsend"><svg class="i sm"><use href="#i-paste"/></svg>Send to computer</button>
+    </div>
+
+    <div class="sh-view" id="v-power">
+      <div class="tiles">
+        <button class="tile" data-power="shutdown"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Shut down</b><small>Turn the PC off</small></span></button>
+        <button class="tile" data-power="restart"><span class="ic"><svg class="i"><use href="#i-restart"/></svg></span><span><b>Restart</b><small>Reboot now</small></span></button>
+        <button class="tile" data-power="sleep"><span class="ic"><svg class="i"><use href="#i-sleep"/></svg></span><span><b>Sleep</b><small>Low-power standby</small></span></button>
+        <button class="tile" data-power="lock"><span class="ic"><svg class="i"><use href="#i-lock"/></svg></span><span><b>Lock</b><small>Show the lock screen</small></span></button>
+        <button class="tile" data-power="logoff"><span class="ic"><svg class="i"><use href="#i-logoff"/></svg></span><span><b>Sign out</b><small>Close your session</small></span></button>
+        <button class="tile" data-power="hibernate"><span class="ic"><svg class="i"><use href="#i-hibernate"/></svg></span><span><b>Hibernate</b><small>Save state and power off</small></span></button>
+      </div>
+      <p class="hint" style="margin-top:12px">Power actions ask for a second tap to confirm, except Lock.</p>
+    </div>
+
+    <div class="sh-view" id="v-settings">
+      <div class="glabel">Appearance</div>
+      <div class="group">
+        <div class="srow stack"><span>Theme</span>
+          <div class="flavors" id="s-flavors">
+            <button class="flv" data-v="auto"><span class="fv auto"></span>Auto</button>
+            <button class="flv latte" data-v="latte"><span class="fv"></span>Latte</button>
+            <button class="flv frappe" data-v="frappe"><span class="fv"></span>Frapp&eacute;</button>
+            <button class="flv macchiato" data-v="macchiato"><span class="fv"></span>Macchiato</button>
+            <button class="flv mocha" data-v="mocha"><span class="fv"></span>Mocha</button>
+          </div>
+        </div>
+        <div class="srow stack"><span>Accent</span>
+          <div class="accents" id="s-accents">
+            <button data-v="blue" aria-label="Blue" style="background:var(--ctp-blue)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button data-v="mauve" aria-label="Mauve" style="background:var(--ctp-mauve)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button data-v="pink" aria-label="Pink" style="background:var(--ctp-pink)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button data-v="peach" aria-label="Peach" style="background:var(--ctp-peach)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button data-v="green" aria-label="Green" style="background:var(--ctp-green)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button data-v="teal" aria-label="Teal" style="background:var(--ctp-teal)"><svg class="i"><use href="#i-check"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="glabel">Touchpad</div>
+      <div class="group">
+        <div class="srow stack"><div style="display:flex;justify-content:space-between"><span>Pointer speed</span><span class="val" id="v-speed"></span></div><input type="range" id="s-speed" min="5" max="40" aria-label="Pointer speed"></div>
+        <div class="srow stack"><div style="display:flex;justify-content:space-between"><span>Scroll speed</span><span class="val" id="v-scroll"></span></div><input type="range" id="s-scroll" min="1" max="8" aria-label="Scroll speed"></div>
+        <div class="srow"><span>Natural scrolling</span><button class="tog" id="s-natural" role="switch" aria-label="Natural scrolling"></button></div>
+        <div class="srow"><span>Vibration</span><button class="tog" id="s-haptics" role="switch" aria-label="Vibration"></button></div>
+      </div>
+      <div class="glabel">App</div>
+      <div class="group">
+        <div class="srow stack"><div style="display:flex;justify-content:space-between;align-items:center"><span>Install as app</span><button class="btn" id="installbtn" hidden>Install</button></div><div class="hint" id="installhelp"></div></div>
+        <div class="srow"><span>Gesture help</span><button class="btn ghost" id="showhelp">Show</button></div>
+      </div>
+    </div>
+
+    <div class="sh-view" id="v-computers">
+      <div class="group" id="complist"></div>
+      <div class="glabel">Add a computer</div>
+      <form id="addform" style="display:flex;gap:8px">
+        <input class="field" id="addin" placeholder="Paste the link from the PC's admin page" autocomplete="off" spellcheck="false">
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <p class="hint" id="pickmsg" style="margin-top:10px"></p>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"><svg class="i"><use href="#i-info"/></svg><span></span></div>
+<textarea id="sysin" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1"></textarea>
