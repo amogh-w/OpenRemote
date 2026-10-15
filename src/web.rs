@@ -2,7 +2,7 @@
 
 use crate::command::{Dispatcher, Injector, Msg};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{ConnectInfo, Query, State};
+use axum::extract::{ConnectInfo, Path, Query, State};
 use axum::http::{header, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
@@ -34,6 +34,7 @@ pub fn router<I: Injector + 'static>(state: Arc<AppState<I>>) -> Router {
         .route("/ws", get(ws_handler::<I>))
         .route("/admin", get(admin::<I>))
         .route("/manifest.webmanifest", get(manifest::<I>))
+        .route("/icon/{file}", get(app_icon::<I>))
         .route("/sw.js", get(service_worker))
         .route("/icon-180.png", get(|| async { png(ICON_180) }))
         .route("/icon-192.png", get(|| async { png(ICON_192) }))
@@ -57,6 +58,31 @@ pub fn token_ok(expected: &str, given: &str) -> bool {
 
 async fn index() -> Html<&'static str> {
     Html(INDEX_HTML)
+}
+
+/// App/window icon by key (`/icon/<16 hex>.png`). Keys are issued by the server in window and app
+/// lists, so this can only return icons of things the server itself found.
+async fn app_icon<I: Injector + 'static>(
+    State(st): State<Arc<AppState<I>>>,
+    Path(file): Path<String>,
+    Query(q): Query<WsQuery>,
+) -> Response {
+    if st.require_token && !token_ok(&st.token, q.t.as_deref().unwrap_or("")) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    let Some(key) = file.strip_suffix(".png").map(str::to_owned) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let st2 = st.clone();
+    // Icon extraction is blocking GDI work; keep it off the async workers.
+    match tokio::task::spawn_blocking(move || st2.dispatcher.icon_png(&key)).await {
+        Ok(Some(bytes)) => (
+            [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "private, max-age=3600")],
+            bytes,
+        )
+            .into_response(),
+        _ => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 fn png(bytes: &'static [u8]) -> Response {

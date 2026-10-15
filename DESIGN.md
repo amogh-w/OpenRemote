@@ -12,7 +12,7 @@ frontend on the phone, a small JSON protocol in between.
 | 3 | Media and volume keys | Just key names (`volume_up`, `media_play_pause`, ...). |
 | 4 | Power: restart, shutdown, logoff, hibernate, sleep, lock | Spawn `shutdown.exe` / `rundll32` with no window. Behind a two-tap confirm in the UI. |
 | 5 | Open a URL, browser shortcuts | URL: http(s) only, handed to `url.dll,FileProtocolHandler` as one argument (no shell). Browser actions are plain key combos sent by the frontend. |
-| 6 | App switcher: list windows, icons, focus/minimize/maximize/restore/close | `EnumWindows` for visible top-level windows (id, title, exe). Icons via `SHGetFileInfo`/`ExtractIconEx` to PNG, cached and served over HTTP. Actions via `SetForegroundWindow`, `ShowWindow`, `PostMessage(WM_CLOSE)`. Skip pinned/recent apps at first. |
+| 6 | App switcher and launcher (**done**) | `EnumWindows` filtered like the taskbar (visible, unowned, not cloaked, not a tool window). Actions via `ShowWindow`, `SetForegroundWindow` (after an F24 key tap so Windows allows it) and `PostMessage(WM_CLOSE)`. Launcher = Start Menu `.lnk` files via `ShellExecute` on a COM thread. Icons: `PrivateExtractIconsW` (64 px) for executables, the shell image list (48 px, no shortcut arrow) for shortcuts, encoded to PNG with the `png` crate and cached. The server issues opaque keys; clients never send paths. Pinned and recent apps are not covered. |
 | 7 | Window thumbnails | Later: `IShellItemImageFactory` to PNG. |
 | 8 | Foreground-app push | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` and broadcast `{t:"foreground", title, exe}`. |
 | 9 | Clipboard sync (text, later images) | `arboard` crate. |
@@ -20,7 +20,7 @@ frontend on the phone, a small JSON protocol in between.
 | 11 | Pairing | Optional random 128-bit token carried in the QR link. Off by default for now. |
 | 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), the QR code and manual IP entry. |
 | 13 | QR code | The admin page renders it (`qrcode` crate, SVG). |
-| 14 | Tray icon and menu (Show QR, Settings, Quit) | `tray-icon` crate; both entries open the admin page. |
+| 14 | Tray icon and menu (**done**: Show QR code, Quit) | `tray-icon` crate. The server runs on a worker thread while the main thread runs the Win32 message loop; the release build uses the GUI subsystem so there is no console window. |
 | 15 | Settings UI | No native GUI. The admin page on `127.0.0.1` plus a settings file under `%APPDATA%`. |
 | 16 | Launch on startup | `HKCU\...\Run` value (no admin rights needed). |
 | 17 | Works on UAC prompts and the lock screen | Later: the same exe in a `--service` mode that spawns a `--helper` in the active session. |
@@ -61,12 +61,12 @@ animation frame.
 
 ### Crates
 
-`axum`, `tokio`, `serde`/`serde_json`, `qrcode`, `if-addrs`, `arboard`, `windows-sys`; planned:
-`tray-icon`, `mdns-sd`, `rust-embed`, `rcgen`/`rustls`.
+`axum`, `tokio`, `serde`/`serde_json`, `qrcode`, `if-addrs`, `arboard`, `png`, `tray-icon`, `windows-sys`; planned:
+`mdns-sd`, `rust-embed`, `rcgen`/`rustls`.
 
 ## Milestones
 
 1. **Core** (done): WebSocket server, mouse, keyboard, text, QR admin page, web app, PWA basics.
-2. **Desktop shell**: tray icon, settings file in the admin page, autostart, mDNS, device list.
-3. **Extras**: app list and icons, foreground push, image clipboard.
+2. **Desktop shell**: tray icon (done), settings page in the admin UI, autostart, mDNS, device list.
+3. **Extras**: app switcher and launcher (done), foreground push, image clipboard.
 4. **Hardening**: service and helper for UAC/lock screen, TLS, thumbnails, installer, update check.

@@ -8,14 +8,16 @@ pub use stub::LogInjector as PlatformInjector;
 
 #[cfg(windows)]
 mod win {
-    use crate::command::{Button, Injector, PowerAct};
+    use crate::command::{AppEntry, Button, Injector, PowerAct, WindowAct, WindowInfo};
     use std::mem::size_of;
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
 
     #[derive(Default)]
-    pub struct WinInjector;
+    pub struct WinInjector {
+        reg: crate::winapps::Registry,
+    }
 
     fn send(input: INPUT) {
         // SAFETY: `input` is a fully initialised INPUT and the size matches the struct.
@@ -75,6 +77,26 @@ mod win {
         /// The URL is passed as a single argv entry to url.dll, never through a shell.
         fn open_url(&self, url: &str) {
             spawn_hidden("rundll32.exe", &["url.dll,FileProtocolHandler", url]);
+        }
+
+        fn windows(&self) -> Vec<WindowInfo> {
+            self.reg.windows()
+        }
+
+        fn window_action(&self, id: u64, act: WindowAct) {
+            crate::winapps::window_action(id, act);
+        }
+
+        fn apps(&self) -> Vec<AppEntry> {
+            self.reg.apps()
+        }
+
+        fn launch_app(&self, id: &str) {
+            self.reg.launch(id);
+        }
+
+        fn icon_png(&self, key: &str) -> Option<Vec<u8>> {
+            self.reg.icon_png(key)
         }
 
         fn clip_get(&self) -> Option<String> {

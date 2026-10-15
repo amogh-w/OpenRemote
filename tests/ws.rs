@@ -1,7 +1,7 @@
 //! End-to-end tests: real axum server on an ephemeral port, real WebSocket client, mock injector.
 
 use futures_util::{SinkExt, StreamExt};
-use openremote::command::{Button, Dispatcher, Injector};
+use openremote::command::{AppEntry, Button, Dispatcher, Injector, WindowAct, WindowInfo};
 use openremote::web::{self, AppState};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -10,6 +10,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::Message;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
+const ICON_KEY: &str = "0123456789abcdef";
 
 #[derive(Default)]
 struct Rec(Mutex<Vec<String>>);
@@ -34,6 +35,21 @@ impl Injector for Handle {
     }
     fn vk_for_char(&self, c: char) -> u8 {
         c.to_ascii_uppercase() as u8
+    }
+    fn windows(&self) -> Vec<WindowInfo> {
+        vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: ICON_KEY.into(), minimized: false, foreground: true }]
+    }
+    fn window_action(&self, id: u64, a: WindowAct) {
+        self.0 .0.lock().unwrap().push(format!("win {id} {a:?}"));
+    }
+    fn apps(&self) -> Vec<AppEntry> {
+        vec![AppEntry { id: ICON_KEY.into(), name: "Calculator".into(), icon: ICON_KEY.into() }]
+    }
+    fn launch_app(&self, id: &str) {
+        self.0 .0.lock().unwrap().push(format!("launch {id}"));
+    }
+    fn icon_png(&self, key: &str) -> Option<Vec<u8>> {
+        (key == ICON_KEY).then(|| b"PNG-fake".to_vec())
     }
 }
 
@@ -191,4 +207,47 @@ async fn open_mode_accepts_connections_without_token() {
     // the admin page must not advertise a token in this mode
     let admin = http_get(port, "/admin").await;
     assert!(admin.starts_with("HTTP/1.1 200") && !admin.contains("?t=") && admin.contains("Pairing is OFF"));
+}
+
+#[tokio::test]
+async fn window_switcher_and_launcher_over_websocket() {
+    let (port, rec) = start_with(false).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
+    ws.next().await.unwrap().unwrap(); // hello
+
+    ws.send(Message::Text(r#"{"t":"win.list"}"#.into())).await.unwrap();
+    let list: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(list["t"], "win.list");
+    assert_eq!(list["items"][0]["title"], "Notes");
+    assert_eq!(list["items"][0]["icon"], ICON_KEY);
+
+    ws.send(Message::Text(r#"{"t":"app.list"}"#.into())).await.unwrap();
+    let apps: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    assert_eq!(apps["items"][0]["name"], "Calculator");
+
+    ws.send(Message::Text(r#"{"t":"win.act","id":42,"a":"focus"}"#.into())).await.unwrap();
+    ws.send(Message::Text(format!(r#"{{"t":"app.launch","id":"{ICON_KEY}"}}"#).into())).await.unwrap();
+    ws.send(Message::Text(r#"{"t":"app.launch","id":"C:/Windows/notepad.exe"}"#.into())).await.unwrap(); // refused
+    assert_eq!(wait_for(&rec, 2).await, ["win 42 Focus", format!("launch {ICON_KEY}").as_str()]);
+}
+
+#[tokio::test]
+async fn icon_route_serves_only_issued_keys() {
+    let (port, _) = start_with(false).await;
+    let ok = http_get(port, &format!("/icon/{ICON_KEY}.png")).await;
+    assert!(ok.starts_with("HTTP/1.1 200") && ok.to_lowercase().contains("content-type: image/png"), "{ok}");
+    assert!(ok.contains("PNG-fake"));
+    for path in ["/icon/fedcba9876543210.png", "/icon/..%2f..%2fCargo.toml.png", "/icon/0123456789abcdef", "/icon/0123456789ABCDEF.png"] {
+        let r = http_get(port, path).await;
+        assert!(r.starts_with("HTTP/1.1 404"), "{path}: {}", &r[..30.min(r.len())]);
+    }
+}
+
+#[tokio::test]
+async fn icon_route_needs_token_when_pairing_is_on() {
+    let (port, _) = start().await; // require_token = true
+    let no = http_get(port, &format!("/icon/{ICON_KEY}.png")).await;
+    assert!(no.starts_with("HTTP/1.1 401"), "{}", &no[..30.min(no.len())]);
+    let yes = http_get(port, &format!("/icon/{ICON_KEY}.png?t={TOKEN}")).await;
+    assert!(yes.starts_with("HTTP/1.1 200"));
 }

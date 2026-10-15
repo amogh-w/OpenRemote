@@ -1,6 +1,6 @@
 //! Command layer: typed client messages and the dispatcher that turns them into input events.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -39,6 +39,40 @@ pub enum PowerAct {
     Shutdown,
 }
 
+/// What a client may do to an open window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowAct {
+    Focus,
+    Min,
+    Max,
+    Restore,
+    Close,
+}
+
+/// An open top-level window, as shown in the app switcher.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct WindowInfo {
+    /// Opaque handle; only valid for `win.act` while the window exists.
+    pub id: u64,
+    pub title: String,
+    /// Executable file name, e.g. `chrome.exe` (empty if unknown).
+    pub exe: String,
+    /// Icon key for `GET /icon/<key>.png`; empty when there is no icon.
+    pub icon: String,
+    pub minimized: bool,
+    pub foreground: bool,
+}
+
+/// A launchable application (Start Menu shortcut).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct AppEntry {
+    /// Opaque key handed out by the server; the client never supplies a path.
+    pub id: String,
+    pub name: String,
+    pub icon: String,
+}
+
 /// Messages a client may send (JSON, tagged by `t`).
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(tag = "t", rename_all = "lowercase")]
@@ -69,6 +103,16 @@ pub enum Msg {
     /// Ask for the PC clipboard text; answered with `{"t":"clip","text":...}`.
     #[serde(rename = "clip.get")]
     ClipGet,
+    /// List open windows; answered with `{"t":"win.list","items":[...]}`.
+    #[serde(rename = "win.list")]
+    WinList,
+    #[serde(rename = "win.act")]
+    WinAct { id: u64, a: WindowAct },
+    /// List launchable apps; answered with `{"t":"app.list","items":[...]}`.
+    #[serde(rename = "app.list")]
+    AppList,
+    #[serde(rename = "app.launch")]
+    AppLaunch { id: String },
     Ping,
 }
 
@@ -88,6 +132,18 @@ pub trait Injector: Send + Sync {
         None
     }
     fn clip_set(&self, _text: &str) {}
+    fn windows(&self) -> Vec<WindowInfo> {
+        Vec::new()
+    }
+    fn window_action(&self, _id: u64, _act: WindowAct) {}
+    fn apps(&self) -> Vec<AppEntry> {
+        Vec::new()
+    }
+    fn launch_app(&self, _id: &str) {}
+    /// PNG bytes for an icon key previously returned in a window or app entry.
+    fn icon_png(&self, _key: &str) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 const MAX_CLIP_BYTES: usize = 256 * 1024;
@@ -106,8 +162,13 @@ impl<I: Injector> Dispatcher<I> {
 
     /// Apply a message; returns a reply for the client when the message asks for one.
     pub fn handle(&self, msg: &Msg) -> Option<serde_json::Value> {
-        if let Msg::ClipGet = msg {
-            return Some(serde_json::json!({"t": "clip", "text": self.inj.clip_get().unwrap_or_default()}));
+        match msg {
+            Msg::ClipGet => {
+                return Some(serde_json::json!({"t": "clip", "text": self.inj.clip_get().unwrap_or_default()}));
+            }
+            Msg::WinList => return Some(serde_json::json!({"t": "win.list", "items": self.inj.windows()})),
+            Msg::AppList => return Some(serde_json::json!({"t": "app.list", "items": self.inj.apps()})),
+            _ => {}
         }
         match msg {
             &Msg::Move { dx, dy } => {
@@ -143,9 +204,24 @@ impl<I: Injector> Dispatcher<I> {
                     self.inj.clip_set(text);
                 }
             }
-            Msg::ClipGet | Msg::Ping => {}
+            Msg::WinAct { id, a } => self.inj.window_action(*id, *a),
+            Msg::AppLaunch { id } => {
+                if is_icon_key(id) {
+                    self.inj.launch_app(id);
+                }
+            }
+            Msg::ClipGet | Msg::WinList | Msg::AppList | Msg::Ping => {}
         }
         None
+    }
+
+    /// PNG for an icon key. Rejects anything that is not a key this server could have issued.
+    pub fn icon_png(&self, key: &str) -> Option<Vec<u8>> {
+        if is_icon_key(key) {
+            self.inj.icon_png(key)
+        } else {
+            None
+        }
     }
 
     fn click(&self, b: Button) {
@@ -169,6 +245,11 @@ impl<I: Injector> Dispatcher<I> {
             vks.iter().rev().for_each(|&v| self.inj.key(v, false));
         }
     }
+}
+
+/// Icon and app ids are 16 lowercase hex digits (a hash of the source path).
+pub fn is_icon_key(key: &str) -> bool {
+    key.len() == 16 && key.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 /// Only plain http(s) URLs without whitespace/control characters may be opened.
@@ -288,6 +369,21 @@ pub mod testing {
         fn clip_set(&self, t: &str) {
             self.0.lock().unwrap().push(format!("clip {t}"));
         }
+        fn windows(&self) -> Vec<WindowInfo> {
+            vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: "0123456789abcdef".into(), minimized: false, foreground: true }]
+        }
+        fn window_action(&self, id: u64, a: WindowAct) {
+            self.0.lock().unwrap().push(format!("win {id} {a:?}"));
+        }
+        fn apps(&self) -> Vec<AppEntry> {
+            vec![AppEntry { id: "fedcba9876543210".into(), name: "Calculator".into(), icon: "fedcba9876543210".into() }]
+        }
+        fn launch_app(&self, id: &str) {
+            self.0.lock().unwrap().push(format!("launch {id}"));
+        }
+        fn icon_png(&self, key: &str) -> Option<Vec<u8>> {
+            (key == "0123456789abcdef").then(|| vec![1, 2, 3])
+        }
     }
 }
 
@@ -357,6 +453,45 @@ mod tests {
         let d = Dispatcher::new(rec);
         let r = d.handle(&serde_json::from_str(r#"{"t":"clip.get"}"#).unwrap()).unwrap();
         assert_eq!(r, serde_json::json!({"t": "clip", "text": "from pc"}));
+    }
+
+    #[test]
+    fn window_switcher_messages() {
+        let rec = Arc::new(Rec::default());
+        let d = Dispatcher::new(rec.clone());
+        let list = d.handle(&serde_json::from_str(r#"{"t":"win.list"}"#).unwrap()).unwrap();
+        assert_eq!(list["t"], "win.list");
+        assert_eq!(list["items"][0]["title"], "Notes");
+        assert_eq!(list["items"][0]["id"], 42);
+        assert_eq!(list["items"][0]["foreground"], true);
+
+        assert_eq!(run(r#"{"t":"win.act","id":42,"a":"close"}"#), ["win 42 Close"]);
+        assert_eq!(run(r#"{"t":"win.act","id":7,"a":"focus"}"#), ["win 7 Focus"]);
+        assert!(serde_json::from_str::<Msg>(r#"{"t":"win.act","id":7,"a":"explode"}"#).is_err());
+    }
+
+    #[test]
+    fn app_launcher_messages() {
+        let rec = Arc::new(Rec::default());
+        let d = Dispatcher::new(rec);
+        let list = d.handle(&serde_json::from_str(r#"{"t":"app.list"}"#).unwrap()).unwrap();
+        assert_eq!(list["items"][0]["name"], "Calculator");
+
+        assert_eq!(run(r#"{"t":"app.launch","id":"fedcba9876543210"}"#), ["launch fedcba9876543210"]);
+        // the client can only launch ids the server issued: anything shaped like a path is refused
+        for bad in ["C:/Windows/System32/cmd.exe", "../../x", "FEDCBA9876543210", "fedcba98765432", ""] {
+            let json = serde_json::json!({"t": "app.launch", "id": bad}).to_string();
+            assert!(run(&json).is_empty(), "{bad:?} must be refused");
+        }
+    }
+
+    #[test]
+    fn icon_keys_are_validated() {
+        let d = Dispatcher::new(Arc::new(Rec::default()));
+        assert_eq!(d.icon_png("0123456789abcdef"), Some(vec![1, 2, 3]));
+        assert_eq!(d.icon_png("0123456789abcde"), None);
+        assert_eq!(d.icon_png("../0123456789abcdef"), None);
+        assert_eq!(d.icon_png("0123456789ABCDEF"), None);
     }
 
     #[test]

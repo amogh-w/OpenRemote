@@ -50,6 +50,9 @@ def build():
 
 if __name__ == "__main__":
     big = build()
+    # raw RGBA (32x32) for the tray icon, included with include_bytes!
+    (OUT / "tray-32.rgba").write_bytes(big.resize((32, 32), Image.LANCZOS).convert("RGBA").tobytes())
+    print("wrote", OUT / "tray-32.rgba")
     for n in (180, 192, 512):
         big.resize((n, n), Image.LANCZOS).save(OUT / f"icon-{n}.png", optimize=True)
         print("wrote", OUT / f"icon-{n}.png")

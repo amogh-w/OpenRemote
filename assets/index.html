@@ -268,6 +268,26 @@ input[type=range] { accent-color:var(--ac); width:140px; }
 #addbox input { flex:1; min-width:0; background:var(--key); color:var(--kt); border:1px solid var(--edge); border-radius:8px; padding:12px; font:inherit; font-size:15px; user-select:text; -webkit-user-select:text; }
 #pickmsg { color:var(--dim); font-size:13px; margin:6px 0; line-height:1.5; }
 
+.apps-top { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.apps-top .seg { flex:1; }
+.apps-top input { flex:1; min-width:0; background:var(--key); color:var(--kt); border:1px solid var(--edge); border-radius:8px; padding:8px 10px; font:inherit; font-size:14px; user-select:text; -webkit-user-select:text; }
+.win { display:flex; align-items:center; gap:10px; padding:6px 4px; border-radius:10px; }
+.win.fg { background:color-mix(in srgb, var(--ac) 18%, transparent); }
+.win.min { opacity:.6; }
+.win img { width:32px; height:32px; flex:none; object-fit:contain; }
+.win .ti { flex:1; min-width:0; }
+.win .ti b { display:block; font-weight:500; font-size:14px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.win .ti small { color:var(--dim); font-size:11px; }
+.win .acts { display:flex; gap:4px; }
+.win .acts button { width:34px; height:34px; border-radius:8px; background:var(--key); display:flex; align-items:center; justify-content:center; }
+.win .acts button svg.i { width:18px; height:18px; }
+.win .acts button.x { color:var(--danger); }
+#appgrid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+.app { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 2px; border-radius:10px; font-size:11px; text-align:center; }
+.app:active { background:var(--key); }
+.app img { width:44px; height:44px; object-fit:contain; }
+.app span { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; line-height:1.2; max-width:100%; word-break:break-word; }
+#appsmsg { font-size:12px; color:var(--dim); text-align:center; padding:10px 0; min-height:16px; }
 #kb { position:fixed; left:-1000px; top:0; width:10px; height:10px; opacity:0; }
 
 @media (orientation:landscape) and (max-height:520px) {
@@ -282,6 +302,10 @@ input[type=range] { accent-color:var(--ac); width:140px; }
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <symbol id="i-apps" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 17h12"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="2"/></symbol>
+    <symbol id="i-restore" viewBox="0 0 24 24"><rect x="4.5" y="8.5" width="11" height="11" rx="2"/><path d="M9 8.5V6.5a2 2 0 0 1 2-2h6.5a2 2 0 0 1 2 2V13a2 2 0 0 1-2 2h-2"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
     <symbol id="i-kbd" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7 14h10"/></symbol>
     <symbol id="i-remote" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></symbol>
@@ -357,6 +381,16 @@ input[type=range] { accent-color:var(--ac); width:140px; }
         </div>
         <div style="flex-basis:100%"></div>
         <div class="row" style="width:100%;margin:0"><button class="k small" data-key="left" data-repeat>&larr; Prev</button><button class="k small" data-key="f5">Slideshow</button><button class="k small" data-key="esc">Esc</button><button class="k small" data-key="right" data-repeat>Next &rarr;</button></div>
+      </section>
+
+      <section class="pane" id="p-apps" hidden>
+        <div class="apps-top">
+          <div class="seg" id="apps-mode"><button data-v="open" class="on">Open windows</button><button data-v="all">All apps</button></div>
+          <input id="appsearch" type="search" placeholder="Search" autocapitalize="off" autocomplete="off" spellcheck="false" hidden>
+        </div>
+        <div id="winlist"></div>
+        <div id="appgrid" hidden></div>
+        <div id="appsmsg"></div>
       </section>
 
       <section class="pane" id="p-web" hidden>
@@ -515,8 +549,10 @@ input[type=range] { accent-color:var(--ac); width:140px; }
     sock.onopen = () => { retry = 0; };
     sock.onmessage = (e) => {
       let m; try { m = JSON.parse(e.data); } catch { return; }
-      if (m.t === 'hello') { c.name = m.host || c.name; saveC(); paintName(); setOnline(true); }
+      if (m.t === 'hello') { c.name = m.host || c.name; saveC(); paintName(); setOnline(true); if (activeTab === 'apps') refreshApps(); }
       else if (m.t === 'clip') gotClip(m.text || '');
+      else if (m.t === 'win.list') { winItems = m.items || []; renderWins(); }
+      else if (m.t === 'app.list') { appItems = m.items || []; renderApps(); }
     };
     sock.onclose = () => {
       setOnline(false);
@@ -755,8 +791,87 @@ input[type=range] { accent-color:var(--ac); width:140px; }
     };
   });
 
+  // ---------- apps: window switcher + launcher
+  let activeTab = '', appsMode = 'open', winItems = [], appItems = [], appsLoaded = false;
+  const iconUrl = (key) => {
+    const c = comps[cur];
+    return key && c ? c.base + '/icon/' + key + '.png' + (c.token ? '?t=' + encodeURIComponent(c.token) : '') : '';
+  };
+  function iconImg(key) {
+    const img = document.createElement('img');
+    img.loading = 'lazy'; img.alt = '';
+    const u = iconUrl(key);
+    if (u) img.src = u; else img.style.visibility = 'hidden';
+    img.onerror = () => { img.style.visibility = 'hidden'; };
+    return img;
+  }
+  function svgIcon(name) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const s = document.createElementNS(NS, 'svg'); s.setAttribute('class', 'i');
+    const u = document.createElementNS(NS, 'use'); u.setAttribute('href', '#i-' + name); s.appendChild(u);
+    return s;
+  }
+  function refreshApps() {
+    if (appsMode === 'open') send({ t: 'win.list' });
+    else if (!appsLoaded) { appsLoaded = true; send({ t: 'app.list' }); }
+  }
+  function renderWins() {
+    const box = $('#winlist'); box.textContent = '';
+    winItems.forEach((w) => {
+      const row = document.createElement('div');
+      row.className = 'win' + (w.foreground ? ' fg' : '') + (w.minimized ? ' min' : ''); row.dataset.id = w.id;
+      const ti = document.createElement('div'); ti.className = 'ti';
+      const b = document.createElement('b'); b.textContent = w.title;           // titles are untrusted: text only
+      const sm = document.createElement('small'); sm.textContent = w.exe || '';
+      ti.append(b, sm);
+      const acts = document.createElement('div'); acts.className = 'acts';
+      [['min', 'min', 'Minimize'], [w.minimized ? 'restore' : 'max', w.minimized ? 'restore' : 'max', w.minimized ? 'Restore' : 'Maximize'], ['close', 'x', 'Close']].forEach(([a, icon, label]) => {
+        const btn = document.createElement('button'); btn.dataset.a = a; btn.setAttribute('aria-label', label);
+        if (a === 'close') btn.className = 'x';
+        btn.appendChild(svgIcon(icon)); acts.appendChild(btn);
+      });
+      row.append(iconImg(w.icon), ti, acts); box.appendChild(row);
+    });
+    $('#appsmsg').textContent = appsMode === 'open' ? (winItems.length ? '' : 'No windows found.') : $('#appsmsg').textContent;
+  }
+  function renderApps() {
+    const grid = $('#appgrid'); grid.textContent = '';
+    const q = $('#appsearch').value.trim().toLowerCase();
+    const items = appItems.filter((a) => !q || a.name.toLowerCase().includes(q));
+    items.forEach((a) => {
+      const cell = document.createElement('button'); cell.className = 'app'; cell.dataset.id = a.id; cell.dataset.name = a.name;
+      const span = document.createElement('span'); span.textContent = a.name;
+      cell.append(iconImg(a.icon), span); grid.appendChild(cell);
+    });
+    $('#appsmsg').textContent = appsMode === 'all' ? (items.length ? '' : (appItems.length ? 'No match.' : 'Loading...')) : $('#appsmsg').textContent;
+  }
+  function setAppsMode(mode) {
+    appsMode = mode;
+    $$('#apps-mode button').forEach((b) => b.classList.toggle('on', b.dataset.v === mode));
+    $('#winlist').hidden = mode !== 'open'; $('#appgrid').hidden = mode !== 'all'; $('#appsearch').hidden = mode !== 'all';
+    $('#appsmsg').textContent = '';
+    if (mode === 'open') renderWins(); else renderApps();
+    refreshApps();
+  }
+  $('#apps-mode').onclick = (e) => { const v = e.target.dataset && e.target.dataset.v; if (v) setAppsMode(v); };
+  $('#appsearch').oninput = renderApps;
+  $('#winlist').onclick = (e) => {
+    const row = e.target.closest('.win'); if (!row) return;
+    const act = e.target.closest('button[data-a]');
+    send({ t: 'win.act', id: Number(row.dataset.id), a: act ? act.dataset.a : 'focus' });
+    buzz(); setTimeout(() => send({ t: 'win.list' }), 450);
+  };
+  $('#appgrid').onclick = (e) => {
+    const cell = e.target.closest('.app'); if (!cell) return;
+    send({ t: 'app.launch', id: cell.dataset.id }); buzz();
+    $('#appsmsg').textContent = 'Launching ' + cell.dataset.name + '...';
+    // show it in the open-windows view once it has had time to appear
+    setTimeout(() => { if (activeTab === 'apps') setAppsMode('open'); }, 1400);
+  };
+  setInterval(() => { if (activeTab === 'apps' && appsMode === 'open' && online && !document.hidden) send({ t: 'win.list' }); }, 3000);
+
   // ---------- tabs
-  const TABS = [['set', 'menu', 'Settings'], ['kbd', 'kbd', 'Keyboard'], ['remote', 'remote', 'Media remote'], ['web', 'web', 'Browser'], ['keys', 'fn', 'Special keys'], ['clip', 'clip', 'Clipboard'], ['power', 'power', 'Power']];
+  const TABS = [['set', 'menu', 'Settings'], ['kbd', 'kbd', 'Keyboard'], ['remote', 'remote', 'Media remote'], ['apps', 'apps', 'Apps'], ['web', 'web', 'Browser'], ['keys', 'fn', 'Special keys'], ['clip', 'clip', 'Clipboard'], ['power', 'power', 'Power']];
   const tabsEl = $('#tabs');
   TABS.forEach(([id, icon, label]) => {
     const b = document.createElement('button'); b.dataset.tab = id; b.setAttribute('aria-label', label);
@@ -764,6 +879,8 @@ input[type=range] { accent-color:var(--ac); width:140px; }
     b.onclick = () => showTab(id); tabsEl.appendChild(b);
   });
   function showTab(id) {
+    activeTab = id;
+    if (id === 'apps') refreshApps();
     $$('.pane').forEach((p) => { p.hidden = p.id !== 'p-' + id; });
     $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === id));
     store.set('or_tab', id);
