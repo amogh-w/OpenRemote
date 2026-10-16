@@ -118,6 +118,7 @@
       setConn(retry >= 3 ? 'off' : 'wait');
       if (retry === 3 && !everOnline && !warned) { warned = true; toast("Can't reach the PC. Is it running, on the same Wi-Fi?", { bad: true, ms: 4000 }); }
       timer = setTimeout(connect, Math.min(3000, 400 * retry));
+      if (retry === 2) pairStatus().then((s) => { if (s && s.required && !s.paired) { clearTimeout(timer); ws = null; showPair('This phone is not paired (any more). Pair it again.'); } });
     };
   }
   const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
@@ -345,6 +346,38 @@
     kb.addEventListener('compositionend', (e) => { composing = false; if (e.data) typed(e.data); kb.value = ''; });
     kb.addEventListener('input', () => { if (!composing) kb.value = ''; });
   })();
+
+  // ============================================================ pairing
+  const pairEl = $('#pair');
+  const deviceName = () => (/iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android phone' : 'Browser');
+  async function pairStatus() {
+    try { const r = await fetch('/pair/status', { cache: 'no-store' }); return await r.json(); } catch { return null; }
+  }
+  function paintPairing(s) { $('#pairrow').hidden = !(s && s.required && s.device); }
+  function showPair(msg) { $('#pairmsg').textContent = msg || ''; pairEl.hidden = false; setTimeout(() => $('#paircode').focus(), 50); }
+  async function doPair(proof) {
+    $('#pairmsg').textContent = 'Pairing...';
+    try {
+      const r = await fetch('/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...proof, name: deviceName() }) });
+      if (r.ok) { pairEl.hidden = true; $('#paircode').value = ''; paintPairing(await pairStatus()); connect(); return true; }
+      $('#pairmsg').textContent = r.status === 429 ? 'Too many wrong tries. Wait a few minutes, then ask the PC for a new code.' : 'That code is wrong or has expired. Check the PC for a fresh one.';
+    } catch { $('#pairmsg').textContent = "Can't reach the PC. Is it running, on the same Wi-Fi?"; }
+    return false;
+  }
+  $('#pairform').onsubmit = (e) => { e.preventDefault(); const c = $('#paircode').value.replace(/\D/g, ''); if (c.length !== 6) { $('#pairmsg').textContent = 'The code has 6 digits.'; return; } doPair({ code: c }); };
+  $('#unpair').onclick = async () => {
+    try { await fetch('/pair/forget', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch {}
+    if (ws) { ws.onclose = null; try { ws.close(); } catch {} ws = null; } clearTimeout(timer);
+    closeSheet(); paintPairing(null); showPair('This phone was unpaired.');
+  };
+  async function boot() {
+    const qp = new URLSearchParams(location.search).get('pair');
+    if (qp) { history.replaceState(null, '', location.pathname); if (await doPair({ secret: qp })) return; }
+    const s = await pairStatus();
+    paintPairing(s);
+    if (s && s.required && !s.paired) return showPair();
+    connect();
+  }
 
   // ============================================================ apps: windows + launcher
   let appsMode = 'open', winItems = [], appItems = [], winLoaded = false, appsLoaded = false, appsRequested = false;
@@ -690,6 +723,6 @@
   // ============================================================ start
   paintSettings(); paintMods();
   go(page);
-  connect();
+  boot();
   if (!store.get('or_seen_hint', false) && page === 'pad') setTimeout(showCoach, 700);
 })();

@@ -264,9 +264,23 @@
         <div class="srow stack"><div style="display:flex;justify-content:space-between;align-items:center"><span>Install as app</span><button class="btn" id="installbtn" hidden>Install</button></div><div class="hint" id="installhelp"></div></div>
         <div class="srow"><span>Gesture help</span><button class="btn ghost" id="showhelp">Show</button></div>
         <div class="srow stack"><span>Input on UAC prompts</span><div class="hint" id="helperstate"></div></div>
+        <div class="srow" id="pairrow" hidden><span>Pairing</span><button class="btn ghost" id="unpair">Unpair this phone</button></div>
       </div>
     </div>
 
+  </div>
+</div>
+
+<div id="pair" hidden>
+  <div class="pair-box">
+    <span class="pair-ic"><svg class="i"><use href="#i-lock"/></svg></span>
+    <h2>Pair this phone</h2>
+    <p>On your PC, click the OpenRemote tray icon and choose <b>Pair a phone</b>. Scan the QR code, or type the 6-digit code here.</p>
+    <form id="pairform" autocomplete="off">
+      <input class="field" id="paircode" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="000 000" autocomplete="one-time-code" aria-label="6-digit code">
+      <button class="btn" type="submit">Pair</button>
+    </form>
+    <p class="hint" id="pairmsg"></p>
   </div>
 </div>
 

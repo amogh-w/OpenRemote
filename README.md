@@ -22,13 +22,13 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 
 **App and desktop**
 - **Input on UAC prompts, administrator windows and the lock screen**, with an optional SYSTEM helper service you install on purpose (off by default, see Security).
-- **Tray icon** with Show phone link and Quit; the release build has no console window.
+- **Tray icon** with Pair a phone, a Start with Windows toggle and Quit; the release build has no console window.
 - **Installable web app (PWA)** with a manifest, icons and an offline shell.
 - **Catppuccin theming**: Latte, Frappe, Macchiato, Mocha or Auto, with six accent colors.
 - **Polished motion**: short, subtle animations, switched off by the phone's "reduce motion" setting.
 - **One PC per page**: the page connects straight back to the PC that served it. Saving and switching between several PCs is planned (see the roadmap).
 - **Landscape layout** with a side navigation rail.
-- **No pairing yet**: anyone on your network can connect. Pairing (a QR code and sign-in codes) is planned and will be redesigned; see the roadmap.
+- **Pairing**: a phone must pair once (QR code or 6-digit code shown on the PC) before it can control anything. Pairing is on by default, each phone has its own key, and any phone can be revoked from the PC.
 
 ## Screenshots
 
@@ -63,8 +63,8 @@ Requirements: Windows 10/11 and a [Rust](https://rustup.rs) toolchain.
 cargo run --release
 ```
 
-1. A tray icon appears. On the PC, open `http://127.0.0.1:1990/admin` (tray: *Show phone link*) to see the phone address.
-2. On the phone, on the same Wi-Fi, open `http://<pc-ip>:1990/` (the admin page lists it).
+1. A tray icon appears. On the PC, open `http://127.0.0.1:1990/admin` (tray: *Pair a phone*) to see the pairing QR code and 6-digit code.
+2. On the phone, on the same Wi-Fi, scan the QR code on the admin page, or open `http://<pc-ip>:1990/` and type the 6-digit code. This is needed once per phone (and again inside the Home Screen app, which keeps its own storage).
 3. Allow the program through Windows Firewall (Private networks) if prompted.
 4. Optional: *Add to Home Screen* for a full-screen app (see below).
 
@@ -74,6 +74,8 @@ Options:
 |---|---|
 | `--port N` | listen port (default 1990, saved) |
 | `--hostname NAME` | name shown on the phone (default: computer name) |
+| `--pairing` / `--no-pairing` | require phones to pair (the default) or not (saved) |
+| `--autostart` / `--no-autostart` | start with Windows for this user (also a toggle in the tray menu) |
 | `--no-tray` | no tray icon; run in the foreground |
 | `--install-helper --yes` | install the SYSTEM input helper (needs administrator approval on the PC) |
 | `--uninstall-helper` | remove the helper |
@@ -117,7 +119,8 @@ Settings live in `%APPDATA%\openremote\settings.json`.
 | Part | Role |
 |---|---|
 | `src/main.rs` | CLI, settings, builds the runtime; server on a worker thread, tray on the main thread |
-| `src/web.rs` | HTTP routes, WebSocket loop, manifest, icon route, loopback-only admin page |
+| `src/web.rs` | HTTP routes, WebSocket loop, manifest, icon route, Host/Origin and pairing checks, loopback-only admin page |
+| `src/pairing.rs` | One-time pairing offers, paired phones (key hashes), lockout after wrong guesses |
 | `src/command.rs` | `Msg` types, `Injector` trait, `Dispatcher`, key-name table, URL and id validation |
 | `src/input.rs` | Windows `Injector`: `SendInput`, power, clipboard, open URL (stub on other OSes) |
 | `src/media.rs` | Now-playing info and cover art from the Windows system media session |
@@ -163,6 +166,7 @@ Plain HTTP routes next to the socket:
 - `GET /icon/<key>.png`: window and app icons. Keys are issued by the server in `win.list` / `app.list`, so clients can only fetch or launch things the server itself found.
 - `GET /clip/image.png`: the PC clipboard image as a PNG.
 - `GET /media/art`: cover image of the track that is playing (PNG or JPEG), 404 when there is none.
+- `GET /pair/status`: `{required, paired, device}` for the caller. `POST /pair` (`{code}` or `{secret}`, plus `name`): pair and receive the key cookie. `POST /pair/forget`: a phone removes itself. `POST /admin/revoke` (loopback only): remove a phone.
 - `POST /clip/image`: put an uploaded PNG on the PC clipboard (`Content-Type: image/png`, up to 32 MB, at most 8192 px a side and 36 megapixels). The page converts photos to PNG on the phone first.
 
 ## Input on UAC prompts and the lock screen
@@ -186,14 +190,16 @@ falls back to plain `SendInput` when it is not. Settings > App on the phone show
 Read before turning it on:
 
 - Any program running as you can use the helper to send input, including to a UAC prompt.
-- There is no pairing yet, so anyone on your network who can reach the app can click through a UAC prompt on this PC.
+- Pairing protects it from strangers on your network, but a phone you paired can click through a UAC prompt on this PC. Pair only phones you trust, and revoke lost ones.
 - Use it only on a network you fully trust, and remove it (`--uninstall-helper`) when you do not need it.
 - Text typed from the phone uses the keyboard layout of the signed-in user, also on the secure desktop.
 
 ## Security
 
-- **Plain HTTP, no pairing.** Anyone who can reach port 1990 can control the PC (type keys, shut down, read or write the clipboard). Use it only on a network you trust. A first version of pairing (token and QR code) was removed because it was not good enough; a better one is planned (see the roadmap).
+- **Plain HTTP.** Nothing on the network is encrypted, so someone who can watch your Wi-Fi traffic can read what you type and could steal a paired phone's key cookie. Pairing keeps strangers out, it does not hide traffic. HTTPS is on the roadmap. With `--no-pairing`, anyone who can reach port 1990 can control the PC (type keys, shut down, read or write the clipboard).
+- **Pairing.** The PC shows a one-time offer (QR link plus 6-digit code, valid 2 minutes, usable once). A phone that proves it has the offer gets a random 256-bit key as an `HttpOnly`, `SameSite=Strict` cookie, so the key never appears in a URL and page scripts cannot read it. The PC stores only a SHA-256 hash of each key. Five wrong guesses in a row pause pairing for 5 minutes and burn the offer. Revoking a phone cuts its open connection within a few seconds. The PC itself (loopback) never needs to pair. Everything except the page, the manifest, the icons and the pairing routes needs a paired phone.
 - `/admin` answers only loopback requests with a loopback `Host` header.
+- **Other websites cannot reach the app.** Every request must use an address a person would type (an IP address, `localhost`, this PC's name or a `.local` name), which blocks DNS rebinding. A request that carries an `Origin` (every browser WebSocket and cross-site fetch does) must come from the page the app itself serves. Scripts and tools without an `Origin` still work.
 - Input is clamped (move, scroll, text length); `open` accepts only `http`/`https` URLs without whitespace; app launches and icons only by server-issued keys.
 - Image uploads are validated before use: the PNG signature and dimensions are checked before any pixel is decoded, and only `image/png` bodies are accepted. A website cannot send that to the PC without a CORS preflight, which the server never grants.
 - Window titles are sent to connected phones; the web app renders them as text, never HTML.
@@ -226,9 +232,8 @@ See `CLAUDE.md` for contributor conventions and gotchas.
 ## Roadmap
 
 **Next**
-- [ ] Autostart at login (per-user registry entry, no admin rights)
 - [ ] Several computers: add, save and switch between PCs from the phone (removed for now; the page just connects to the PC it came from)
-- [ ] Pairing and sign-in: a properly designed way to authorize a phone (QR code or short code, per-device access, revocation). An earlier token and QR version was removed and will return in a new form
+- [ ] Pairing extras: rename a phone, per-phone permissions, an alert when a new phone pairs
 - [ ] Settings page on the admin site: hostname, connected devices
 - [ ] mDNS discovery (`_openremote._tcp`) so native clients can find the PC
 - [ ] Foreground-app push, so the phone can adapt to the active program

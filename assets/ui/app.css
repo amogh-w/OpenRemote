@@ -41,8 +41,9 @@ html[data-accent=teal]  { --ac: var(--ctp-teal); }
 /* ---------- base ---------- */
 [hidden] { display: none !important; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--kt); overflow: hidden; overscroll-behavior: none;
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--kt); overscroll-behavior: none;
   font: 16px/1.25 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
+body { overflow: hidden; }
 button { font: inherit; color: inherit; border: 0; background: none; padding: 0; margin: 0; cursor: pointer; touch-action: manipulation;
   transition: transform var(--d-fast) var(--ease), background-color var(--d-fast) var(--ease), color var(--d-fast) var(--ease), opacity var(--d-fast) var(--ease), box-shadow var(--d-fast) var(--ease); }
 button:active { transform: scale(.96); }
@@ -331,6 +332,16 @@ label.btn { cursor: pointer; }
 .hint.ok { color: var(--ok); }
 
 /* ---------- toast ---------- */
+/* ---------- pairing screen ---------- */
+#pair { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
+#pair[hidden] { display: none; }
+.pair-box { width: min(100%, 360px); text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.pair-box h2 { margin: 4px 0 0; font-size: 22px; }
+.pair-box p { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--dim); }
+.pair-ic { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--ac-soft); color: var(--ac); }
+.pair-ic svg.i { width: 30px; height: 30px; color: var(--ac); }
+#pairform { display: flex; gap: 8px; width: 100%; margin-top: 6px; }
+#paircode { text-align: center; font-size: 22px; font-weight: 650; letter-spacing: .12em; font-variant-numeric: tabular-nums; }
 #toast { position: fixed; left: 50%; bottom: calc(var(--safe-b) + 86px); z-index: 30; display: flex; align-items: center; gap: 8px; max-width: 88vw; padding: 11px 16px; border-radius: 16px; background: var(--ctp-crust); color: var(--ctp-text); font-size: 14px; font-weight: 550; box-shadow: var(--shadow), 0 0 0 1px var(--line);
   opacity: 0; transform: translate(-50%, 14px) scale(.97); pointer-events: none; transition: opacity var(--d) var(--ease), transform var(--d) var(--spring); }
 #toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }

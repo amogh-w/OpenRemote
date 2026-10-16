@@ -556,8 +556,8 @@ and keyboard also work on UAC prompts, administrator windows and the lock screen
 
 Read this first:
   - Any program that runs as you can use the helper to send input, including to UAC prompts.
-  - OpenRemote has no pairing yet: anyone on your network who can reach the app can click through a UAC
-    prompt on this PC. Only turn this on on a network you fully trust.
+  - Every phone you pair can click through a UAC prompt on this PC (and with --no-pairing, anyone on your
+    network can). Pair only phones you trust and revoke lost ones on the admin page.
   - Windows will ask you to approve the installation (a UAC prompt on this PC).
 
 To continue, run it again with --yes. To remove it later: openremote --uninstall-helper";

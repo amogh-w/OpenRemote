@@ -9,7 +9,7 @@ mod imp {
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
     use std::ptr::{null, null_mut};
-    use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+    use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
     use tray_icon::{Icon, TrayIconBuilder, TrayIconEvent};
     use windows_sys::Win32::Foundation::{GENERIC_WRITE, INVALID_HANDLE_VALUE};
     use windows_sys::Win32::Storage::FileSystem::{CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING};
@@ -17,7 +17,7 @@ mod imp {
         AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DispatchMessageW, GetMessageW, MessageBoxW, TranslateMessage, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MSG,
+        DispatchMessageW, MessageBoxW, MsgWaitForMultipleObjects, PeekMessageW, TranslateMessage, MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MSG, PM_REMOVE, QS_ALLINPUT, WM_QUIT,
     };
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -69,10 +69,11 @@ mod imp {
     /// Show the tray icon and run the Win32 message loop on this thread until the process exits.
     pub fn run_tray(admin_url: String) -> Result<(), String> {
         let icon = Icon::from_rgba(TRAY_ICON_RGBA.to_vec(), 32, 32).map_err(|e| e.to_string())?;
-        let show = MenuItem::new("Show phone link", true, None);
+        let show = MenuItem::new("Pair a phone", true, None);
+        let auto = CheckMenuItem::new("Start with Windows", true, crate::autostart::enabled(), None);
         let quit = MenuItem::new("Quit", true, None);
         let menu = Menu::new();
-        menu.append_items(&[&show, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
+        menu.append_items(&[&show, &auto, &PredefinedMenuItem::separator(), &quit]).map_err(|e| e.to_string())?;
         let _tray = TrayIconBuilder::new()
             .with_menu(Box::new(menu))
             .with_tooltip("OpenRemote")
@@ -80,31 +81,44 @@ mod imp {
             .build()
             .map_err(|e| e.to_string())?;
 
-        let (show_id, quit_id) = (show.id().clone(), quit.id().clone());
-        let url = admin_url.clone();
-        MenuEvent::set_event_handler(Some(move |e: MenuEvent| {
-            if e.id == show_id {
-                open_in_browser(&url);
-            } else if e.id == quit_id {
-                std::process::exit(0);
-            }
-        }));
+        let (show_id, auto_id, quit_id) = (show.id().clone(), auto.id().clone(), quit.id().clone());
+        let admin_url_menu = admin_url.clone();
         TrayIconEvent::set_event_handler(Some(move |e: TrayIconEvent| {
             if let TrayIconEvent::DoubleClick { .. } = e {
                 open_in_browser(&admin_url);
             }
         }));
 
-        // The tray's hidden window delivers its events through this loop.
+        // The tray's hidden window delivers its events through this loop. Menu clicks are read from the channel
+        // here, on this thread, because the menu items cannot be touched from another one.
         // SAFETY: standard message pump on the thread that created the tray icon.
         unsafe {
             let mut msg: MSG = zeroed();
-            while GetMessageW(&mut msg, null_mut(), 0, 0) > 0 {
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
+            loop {
+                MsgWaitForMultipleObjects(0, null(), 0, 250, QS_ALLINPUT);
+                while PeekMessageW(&mut msg, null_mut(), 0, 0, PM_REMOVE) != 0 {
+                    if msg.message == WM_QUIT {
+                        return Ok(());
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+                while let Ok(e) = MenuEvent::receiver().try_recv() {
+                    if e.id == show_id {
+                        open_in_browser(&admin_url_menu);
+                    } else if e.id == auto_id {
+                        // the check mark has already flipped; make the registry match, or undo it
+                        let want = auto.is_checked();
+                        if let Err(err) = crate::autostart::set(want) {
+                            auto.set_checked(!want);
+                            error_box(&err);
+                        }
+                    } else if e.id == quit_id {
+                        std::process::exit(0);
+                    }
+                }
             }
         }
-        Ok(())
     }
 }
 

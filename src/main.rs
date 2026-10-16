@@ -19,6 +19,8 @@ USAGE: openremote [OPTIONS]
   --install-helper --yes   install the SYSTEM input helper (UAC prompts, admin windows, lock screen)
   --uninstall-helper       remove it again
   --helper-status          is the helper running?
+  --pairing / --no-pairing   require phones to pair (the default) or not; saved
+  --autostart       start with Windows (this user only); --no-autostart turns it off
   --no-tray         no tray icon; run the server in the foreground
   -v, --verbose     log ignored messages
   -h, --help";
@@ -44,6 +46,18 @@ fn main() {
                 save = true;
             }
             "--hostname" => hostname = args.next().unwrap_or_else(|| die("--hostname needs a value")),
+            "--pairing" | "--no-pairing" => {
+                st.require_pairing = a == "--pairing";
+                save = true;
+            }
+            "--autostart" | "--no-autostart" => {
+                let on = a == "--autostart";
+                match openremote::autostart::set(on) {
+                    Ok(()) => println!("Start with Windows is now {}.", if on { "on" } else { "off" }),
+                    Err(e) => die(&e),
+                }
+                return;
+            }
             "--no-tray" => tray = false,
             "-v" | "--verbose" => verbose = true,
             "-h" | "--help" => {
@@ -70,13 +84,18 @@ fn main() {
     for url in web::lan_urls(st.port) {
         println!("Phone link:  {url}");
     }
-    println!("There is no pairing yet: anyone on your network can control this PC.");
+    if st.require_pairing {
+        println!("Pairing is ON: open the tray menu > Pair a phone (or the admin page) to add a phone.");
+    } else {
+        println!("Pairing is OFF: anyone on your network can control this PC.");
+    }
     println!("Settings file: {}", settings::path().display());
 
     let state = Arc::new(AppState {
         dispatcher: Dispatcher::new(PlatformInjector::default()),
         hostname,
         verbose,
+        pairing: openremote::pairing::Pairing::new(st.require_pairing, Some(settings::devices_path())),
     });
 
     // The server runs on its own thread; this thread owns the tray icon and its message loop.

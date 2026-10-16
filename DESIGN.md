@@ -17,13 +17,13 @@ frontend on the phone, a small JSON protocol in between.
 | 8 | Foreground-app push | `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)` and broadcast `{t:"foreground", title, exe}`. |
 | 9 | Clipboard sync: text and images (**done**) | `arboard` with retries while another program holds the clipboard. Images travel as PNG over HTTP (`POST /clip/image`, `GET /clip/image.png`), validated by dimensions before decoding; the phone converts photos with a canvas. Copies are acknowledged (`clip.ack`). |
 | 10 | Connected-device list | In-memory list (name, IP, last seen) shown in the admin page. |
-| 11 | Pairing (**removed, to be redesigned**) | A first token and QR version was removed because it was not good enough. For now there is no authentication. A new design (QR or short code, per-device access, revocation) is planned. |
-| 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), and manual IP entry (a QR code comes back with pairing). |
-| 13 | QR code | Removed along with the old pairing; returns with the new pairing design. |
+| 11 | Pairing (**done**) | One-time offer on the PC (QR link with a 128-bit secret, plus a 6-digit code), 2 minute expiry, single use, global lockout after 5 wrong guesses. A phone that proves the offer gets a 256-bit random key in an HttpOnly SameSite=Strict cookie (no secrets in URLs, so screenshots and history are safe; it also covers the socket and image routes automatically). Only SHA-256 hashes are stored (`devices.json`). Open sockets re-check their key every 2 seconds so a revoked phone is cut off at once. Loopback is trusted. The first token-in-URL version was removed because it was not good enough. |
+| 12 | Discovery | mDNS (`mdns-sd`, service `_openremote._tcp`), the QR code and manual IP entry. |
+| 13 | QR code | The admin page renders it (`qrcode` crate, SVG) for each LAN address. |
 | 14 | Tray icon and menu (**done**: Show phone link, Quit) | `tray-icon` crate. The server runs on a worker thread while the main thread runs the Win32 message loop; the release build uses the GUI subsystem so there is no console window. |
 | 15 | Settings UI | No native GUI. The admin page on `127.0.0.1` plus a settings file under `%APPDATA%`. |
-| 16 | Launch on startup | `HKCU\...\Run` value (no admin rights needed). |
-| 17 | Works on UAC prompts and the lock screen (**done, opt-in**) | The same exe has three extra modes: `--service` (LocalSystem service that keeps one helper alive in the active console session), `--input-helper` (SYSTEM token copied from that session's winlogon, attaches to the input desktop, injects events read from a named pipe) and `--install-helper` / `--uninstall-helper`. The pipe is limited to SYSTEM and the signed-in user and refuses remote clients. The app sends input to the helper when connected and injects locally otherwise. Installed copy lives in Program Files so a normal program cannot replace the service binary. Off by default; see the README for the risks (no pairing yet). |
+| 16 | Launch on startup (**done**) | `HKCU\...\Run` value (no admin rights needed), toggled from the tray menu or with `--autostart` / `--no-autostart`. |
+| 17 | Works on UAC prompts and the lock screen (**done, opt-in**) | The same exe has three extra modes: `--service` (LocalSystem service that keeps one helper alive in the active console session), `--input-helper` (SYSTEM token copied from that session's winlogon, attaches to the input desktop, injects events read from a named pipe) and `--install-helper` / `--uninstall-helper`. The pipe is limited to SYSTEM and the signed-in user and refuses remote clients. The app sends input to the helper when connected and injects locally otherwise. Installed copy lives in Program Files so a normal program cannot replace the service binary. Off by default; see the README for the risks (a paired phone can click through a UAC prompt). |
 | 18 | Keep the cursor visible with no mouse attached | A few lines of `SystemParametersInfo` (MouseKeys). |
 
 Out of scope for now: Bluetooth transport, auto-update, screen mirroring, file transfer, telemetry.
@@ -53,14 +53,14 @@ animation frame.
 
 ### Security model
 
-- No authentication for now (pairing is planned); the admin page is loopback-only and checks the `Host` header.
+- Pairing (see decision 11), on by default. Every route checks the `Host` header (IP, `localhost`, the PC's name or `.local`, against DNS rebinding), any request with an `Origin` must match the served page (against other websites), and everything except the page, manifest, icons and pairing routes needs a paired phone. The admin page is loopback-only and checks the `Host` header.
 - `open` accepts only `http` and `https`; text, scroll and move sizes are clamped.
-- Plain HTTP on the LAN exposes input to anyone on the network and to sniffers. Later: pairing, and a self-signed TLS
+- Plain HTTP on the LAN exposes input to anyone on the network and to sniffers. Pairing keeps strangers out but does not hide traffic. Later: a self-signed TLS
   certificate (`rcgen` + `rustls`) whose fingerprint is shown during pairing.
 
 ### Crates
 
-`axum`, `tokio`, `serde`/`serde_json`, `if-addrs`, `arboard`, `png`, `tray-icon`, `windows-sys`; planned:
+`axum`, `tokio`, `serde`/`serde_json`, `rand`, `sha2`, `qrcode`, `if-addrs`, `arboard`, `png`, `tray-icon`, `windows-sys`; planned:
 `mdns-sd`, `rust-embed`, `rcgen`/`rustls`.
 
 ## Milestones

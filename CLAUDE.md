@@ -33,7 +33,8 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 
 - `src/command.rs`: `Msg` (serde, tagged by `t`), `Injector` trait (platform backend, default no-op methods),
   `Dispatcher` (validation, clamping, replies), key-name table. Platform-independent and unit-tested.
-- `src/web.rs`: axum routes, WebSocket loop, manifest, `/icon/{file}`, loopback-only `/admin`.
+- `src/web.rs`: axum routes, WebSocket loop, manifest, `/icon/{file}`, `guard` (Host, Origin, pairing), loopback-only `/admin`.
+- `src/pairing.rs`: pairing offers, paired phones (hashes), lockout. Platform independent and unit-tested.
 - `src/media.rs`: now-playing info and cover art via the WinRT media session API (`windows` crate; Windows only).
 - `src/uac.rs`: optional SYSTEM input helper (event wire format, `HelperLink` client, helper process, service, install/uninstall). Input events always go through `WinInjector::emit`, which tries the helper first.
 - `src/input.rs`, `src/winapps.rs`: Windows `Injector` (SendInput, power, clipboard, windows, apps, icons).
@@ -61,8 +62,9 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 - Every `unsafe` block gets a `// SAFETY:` comment. Win32 shell/icon calls run serialized and COM-initialized
   (see `Registry::icon_png` and `launch`); do not cache failures.
 - Never install, start or remove the input helper service on the user's machine while testing (it needs administrator approval and changes the system). Test the pipe by running `--input-helper` by hand and sending only ping or zero-movement frames.
+- A middleware in `web.rs` (`guard`) checks `Host` and `Origin` on every route. Keep it in front of any new route.
 - The admin page is loopback-only and checks the `Host` header. Do not widen it.
-- There is no pairing or auth at the moment (the first token/QR version was removed on purpose; a redesign is on the roadmap). Do not add ad-hoc auth; keep the security notes in `README.md` honest about it.
+- Pairing is on by default (`pairing.rs`, cookie `openremote_key`, only key hashes on disk, loopback trusted). New routes that act on the PC or read its data must stay behind the `guard` in `web.rs` (it requires a paired phone unless the path is in `is_public`). Never put a key or code in a URL. Test the checks with `Pairing::without_loopback_exemption()`, because test clients connect from loopback.
 
 ## Frontend conventions (`assets/ui/`)
 
