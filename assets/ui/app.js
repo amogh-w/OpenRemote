@@ -7,13 +7,14 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
   const NS = 'http://www.w3.org/2000/svg';
+  // Icons are Lucide symbols from the inline sprite (see assets/ui/kit/icons.txt); names are Lucide names.
   function svg(name, cls) {
     const s = document.createElementNS(NS, 'svg');
-    s.setAttribute('class', 'i' + (cls ? ' ' + cls : '')); s.setAttribute('aria-hidden', 'true');
-    const u = document.createElementNS(NS, 'use'); u.setAttribute('href', '#i-' + name); s.appendChild(u);
+    s.setAttribute('class', cls || 'size-5'); s.setAttribute('aria-hidden', 'true');
+    const u = document.createElementNS(NS, 'use'); u.setAttribute('href', '#' + name); s.appendChild(u);
     return s;
   }
-  const setIcon = (svgEl, name) => svgEl.querySelector('use').setAttribute('href', '#i-' + name);
+  const setIcon = (svgEl, name) => svgEl.querySelector('use').setAttribute('href', '#' + name);
 
   // ============================================================ settings
   const S = Object.assign({ theme: 'auto', accent: 'blue', speed: 15, scroll: 3, natural: true, haptics: true }, store.get('or_settings', {}));
@@ -28,22 +29,22 @@
   function paintSettings() {
     const root = document.documentElement;
     root.classList.remove(...FLAVORS); root.classList.add(flavor());
-    root.dataset.accent = S.accent;
+    root.style.setProperty('--accent', 'var(--ctp-' + S.accent + ')');
     const m = $('meta[name=theme-color]');
-    if (m) m.content = getComputedStyle(root).getPropertyValue('--ctp-base').trim() || m.content;
-    $$('#s-flavors .flv').forEach((b) => b.classList.toggle('on', b.dataset.v === S.theme));
+    if (m) m.content = getComputedStyle(root).getPropertyValue('--ctp-mantle').trim() || m.content;
+    $$('#s-flavors .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === S.theme));
     $$('#s-accents button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.accent));
     [['#s-speed', '#v-speed', 'speed'], ['#s-scroll', '#v-scroll', 'scroll']].forEach(([i, v, k]) => {
       const el = $(i); el.value = S[k]; el.style.setProperty('--p', pct(el)); $(v).textContent = S[k];
     });
-    [['#s-natural', 'natural'], ['#s-haptics', 'haptics']].forEach(([id, k]) => { const el = $(id); el.classList.toggle('on', S[k]); el.setAttribute('aria-checked', S[k]); });
+    [['#s-natural', 'natural'], ['#s-haptics', 'haptics']].forEach(([id, k]) => { $(id).checked = !!S[k]; });
   }
-  $('#s-flavors').onclick = (e) => { const b = e.target.closest('.flv'); if (b) { S.theme = b.dataset.v; saveS(); paintSettings(); buzz(); } };
+  $('#s-flavors').onclick = (e) => { const b = e.target.closest('.chip'); if (b) { S.theme = b.dataset.v; saveS(); paintSettings(); buzz(); } };
   $('#s-accents').onclick = (e) => { const b = e.target.closest('button'); if (b) { S.accent = b.dataset.v; saveS(); paintSettings(); buzz(); } };
   $('#s-speed').oninput = (e) => { S.speed = +e.target.value; saveS(); paintSettings(); };
   $('#s-scroll').oninput = (e) => { S.scroll = +e.target.value; saveS(); paintSettings(); };
-  $('#s-natural').onclick = () => { S.natural = !S.natural; saveS(); paintSettings(); buzz(); };
-  $('#s-haptics').onclick = () => { S.haptics = !S.haptics; saveS(); paintSettings(); buzz(); };
+  $('#s-natural').onchange = (e) => { S.natural = e.target.checked; saveS(); buzz(); };
+  $('#s-haptics').onchange = (e) => { S.haptics = e.target.checked; saveS(); buzz(); };
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'auto') paintSettings(); });
 
   // ============================================================ toast
@@ -81,12 +82,14 @@
 
   // ============================================================ connection
   let ws = null, retry = 0, timer = 0, online = false, everOnline = false, wasLost = false, rtt = null, pingAt = 0, warned = false;
+  let connState = 'wait';
   function setConn(state) {
     online = state === 'on';
     const d = $('#dot'); d.classList.toggle('on', online); d.classList.toggle('wait', state === 'wait');
-    $('#status').textContent = online ? (rtt != null ? 'Connected · ' + rtt + ' ms' : 'Connected') : state === 'wait' ? 'Connecting...' : 'Offline · retrying';
+    connState = state; paintStatus();
   }
-  const paintName = () => { $('#hostname').textContent = pc.name; };
+  const paintName = () => paintStatus();
+  function paintStatus() { $('#status').textContent = connState === 'on' ? 'Connected to ' + pc.name : connState === 'wait' ? 'Connecting to ' + pc.name + '...' : 'Offline, retrying'; }
   function connect() {
     clearTimeout(timer);
     if (ws) { ws.onclose = null; ws.onmessage = null; try { ws.close(); } catch {} ws = null; }
@@ -145,7 +148,7 @@
 
   // ============================================================ keys + sticky modifiers
   const mods = new Set();
-  function paintMods() { $$('[data-mod]').forEach((b) => b.classList.toggle('on', mods.has(b.dataset.mod))); }
+  function paintMods() { $$('[data-mod]').forEach((b) => { const on = mods.has(b.dataset.mod); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
   const sendKey = (k) => { send({ t: 'key', k: [...mods, k].join('+') }); if (mods.size) { mods.clear(); paintMods(); } if (/^media_/.test(k)) setTimeout(askMedia, 400); };
   const typed = (s) => { if (mods.size && s.length === 1) sendKey(s.toLowerCase()); else send({ t: 'text', v: s }); };
   $$('[data-mod]').forEach((b) => { b.onclick = () => { const m = b.dataset.mod; mods.has(m) ? mods.delete(m) : mods.add(m); paintMods(); buzz(); }; });
@@ -175,16 +178,27 @@
   });
 
   // ============================================================ mouse output (batched, one message per frame)
-  let ax = 0, ay = 0, sx = 0, sy = 0, queued = false;
+  // Raw finger movement (rx, ry) is scaled once per frame, by the speed of the whole vector over the real elapsed
+  // time. (Scaling every touch event by its own size made the gain jump whenever the browser coalesced or split
+  // events, and scaling each axis alone bent diagonal strokes.) Whole pixels go out; the remainder carries over.
+  let rx = 0, ry = 0, ax = 0, ay = 0, sx = 0, sy = 0, queued = false, lastFlush = 0;
   function flush() {
     queued = false;
+    if (ws && ws.readyState === 1 && ws.bufferedAmount > 256) { queue(); return; }   // link is backed up: keep summing instead of piling up stale moves
+    const now = performance.now(), idle = now - lastFlush > 100;
+    const dt = idle ? 16 : Math.min(50, Math.max(4, now - lastFlush));
+    lastFlush = now;
+    if (rx || ry) {
+      const per16 = Math.hypot(rx, ry) * 16 / dt;   // finger speed in px per 16 ms
+      const g = (S.speed / 10) * (1 + Math.min(per16, 30) / 15);
+      ax += rx * g; ay += ry * g; rx = ry = 0;
+    }
     const ix = Math.trunc(ax), iy = Math.trunc(ay);
     if (ix || iy) { ax -= ix; ay -= iy; send({ t: 'move', dx: ix, dy: iy }); }
     const jx = Math.trunc(sx), jy = Math.trunc(sy);
     if (jx || jy) { sx -= jx; sy -= jy; send({ t: 'scroll', dx: jx, dy: jy }); }
   }
   const queue = () => { if (!queued) { queued = true; requestAnimationFrame(flush); } };
-  const accel = (d) => d * (S.speed / 10) * (1 + Math.min(Math.abs(d), 30) / 15);
 
   // ============================================================ touchpad
   function gchip(box, icon, text) {
@@ -217,7 +231,7 @@
       const c = centroid(e.touches), dx = c.x - g.last.x, dy = c.y - g.last.y;
       g.last = c; g.moved += Math.abs(dx) + Math.abs(dy);
       if (e.touches.length >= 2) { const dir = S.natural ? -1 : 1; sy += dir * dy * S.scroll; sx += dir * dx * S.scroll; if (g.moved > 10) gchip(box, 'mouse', 'Scrolling'); }
-      else { ax += accel(dx); ay += accel(dy); }
+      else { rx += dx; ry += dy; }
       queue();
     }, { passive: false });
     pad.addEventListener('touchend', (e) => {
@@ -237,7 +251,7 @@
     }, { passive: false });
     pad.addEventListener('touchcancel', () => { if (g && g.drag) send({ t: 'btn', b: 'left', s: 'up' }); pad.classList.remove('hold'); g = null; });
     // desktop-browser fallback
-    pad.addEventListener('mousemove', (e) => { if (e.buttons === 1) { ax += accel(e.movementX); ay += accel(e.movementY); queue(); } });
+    pad.addEventListener('mousemove', (e) => { if (e.buttons === 1) { rx += e.movementX; ry += e.movementY; queue(); } });
     pad.addEventListener('mousedown', (e) => { if (e.button === 0) pad._md = performance.now(); });
     pad.addEventListener('mouseup', (e) => { if (e.button === 0 && pad._md && performance.now() - pad._md < 200) { send({ t: 'btn', b: 'left', s: 'click' }); ripple(e.clientX, e.clientY); } });
     pad.addEventListener('wheel', (e) => { e.preventDefault(); sy += e.deltaY; sx += e.deltaX; queue(); }, { passive: false });
@@ -294,10 +308,10 @@
       row.forEach((k) => {
         const b = document.createElement('button'); b.className = 'key'; b.dataset.k = k;
         if (ri === 0) b.classList.add('num');
-        if (k === 'shift') { b.classList.add('w15', 'fn'); b.appendChild(svg(caps ? 'caps' : 'shift')); if (caps) b.classList.add('caps'); else if (shift) b.classList.add('on'); b.setAttribute('aria-label', 'Shift'); }
-        else if (k === 'bksp') { b.classList.add('w15', 'fn'); b.appendChild(svg('backspace')); b.setAttribute('aria-label', 'Backspace'); }
+        if (k === 'shift') { b.classList.add('w15', 'fn'); b.appendChild(svg(caps ? 'arrow-big-up-dash' : 'arrow-big-up', 'size-6')); if (caps) b.classList.add('caps'); else if (shift) b.classList.add('on'); b.setAttribute('aria-label', 'Shift'); }
+        else if (k === 'bksp') { b.classList.add('w15', 'fn'); b.appendChild(svg('delete', 'size-6')); b.setAttribute('aria-label', 'Backspace'); }
         else if (k === 'sym' || k === 'abc') { b.classList.add('w14', 'fn'); b.textContent = k === 'sym' ? '?123' : 'ABC'; }
-        else if (k === 'sys') { b.classList.add('w14', 'fn'); b.appendChild(svg('globe')); b.setAttribute('aria-label', 'System keyboard'); }
+        else if (k === 'sys') { b.classList.add('w14', 'fn'); b.appendChild(svg('globe', 'size-6')); b.setAttribute('aria-label', 'System keyboard'); }
         else if (k === 'space') { b.classList.add('w4'); b.setAttribute('aria-label', 'Space'); }
         else if (k === 'enter') { b.classList.add('w2', 'go'); b.textContent = 'return'; }
         else b.textContent = layout === 'abc' && (shift || caps) ? k.toUpperCase() : k;
@@ -386,7 +400,7 @@
   };
   function iconBox(key) {
     const s = document.createElement('span'); s.className = 'aic';
-    s.appendChild(svg('window', 'fb'));
+    s.appendChild(svg('app-window', 'fb'));
     const u = iconUrl(key);
     if (u) {
       const img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
@@ -403,7 +417,7 @@
   // segmented control with a sliding thumb
   function seg(el, onChange) {
     const btns = $$('button', el);
-    const set = (v, fire) => { btns.forEach((b, i) => { const on = b.dataset.v === v; b.classList.toggle('on', on); if (on) el.style.setProperty('--i', i); }); if (fire) onChange(v); };
+    const set = (v, fire) => { btns.forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === v)); el.dispatchEvent(new Event('sync')); if (fire) onChange(v); };   // 'sync' moves the kit's sliding thumb
     btns.forEach((b) => { b.onclick = () => set(b.dataset.v, true); });
     return set;
   }
@@ -425,8 +439,8 @@
     const sm = document.createElement('small'); const exe = document.createElement('span'); const tag = document.createElement('span'); tag.className = 'tag'; tag.textContent = 'Active';
     sm.append(exe, tag); ti.append(b, sm);
     const acts = document.createElement('div'); acts.className = 'acts';
-    const mk = (a, icon, label, cls) => { const x = document.createElement('button'); x.className = 'iconbtn' + (cls ? ' ' + cls : ''); x.dataset.a = a; x.setAttribute('aria-label', label); x.appendChild(svg(icon)); return x; };
-    const min = mk('min', 'minus', 'Minimize'), max = mk('max', 'max', 'Maximize'), close = mk('close', 'x', 'Close', 'danger');
+    const mk = (a, icon, label, cls) => { const x = document.createElement('button'); x.className = 'btn btn-icon btn-gray' + (cls ? ' ' + cls : ''); x.dataset.a = a; x.setAttribute('aria-label', label); x.appendChild(svg(icon, 'size-4')); return x; };
+    const min = mk('min', 'minus', 'Minimize'), max = mk('max', 'maximize-2', 'Maximize'), close = mk('close', 'x', 'Close', 'danger');
     acts.append(min, max, close);
     el.append(document.createElement('span'), ti, acts);
     el._r = { b, exe, max, ti };
@@ -441,11 +455,11 @@
     if (el._key !== w.icon) { const nb = iconBox(w.icon); el.replaceChild(nb, el.firstChild); el._key = w.icon; }
     const big = !!(w.minimized || w.maximized);   // the button toggles: maximize, then back to the normal size
     r.max.dataset.a = big ? 'restore' : 'max';
-    setIcon($('svg', r.max), big ? 'restore' : 'max'); r.max.setAttribute('aria-label', big ? 'Restore' : 'Maximize');
+    setIcon($('svg', r.max), big ? 'minimize-2' : 'maximize-2'); r.max.setAttribute('aria-label', big ? 'Restore' : 'Maximize');
   }
   function renderWins() {
     const box = $('#winlist');
-    if (!winLoaded) { if (!box.firstChild) for (let i = 0; i < 4; i++) { const s = document.createElement('div'); s.className = 'skel'; box.appendChild(s); } return; }
+    if (!winLoaded) { if (!box.firstChild) for (let i = 0; i < 4; i++) { const s = document.createElement('div'); s.className = 'skel h-16 rounded-card'; box.appendChild(s); } return; }
     $$('.skel, .empty', box).forEach((n) => n.remove());
     const seen = new Set(); let idx = 0;
     winItems.forEach((w) => {
@@ -457,7 +471,7 @@
     });
     for (const [id, el] of winEls) if (!seen.has(id)) { el.classList.add('leave'); setTimeout(() => el.remove(), 160); winEls.delete(id); }
     if (!winItems.length) {
-      const e = document.createElement('div'); e.className = 'empty'; e.appendChild(svg('window'));
+      const e = document.createElement('div'); e.className = 'empty'; e.appendChild(svg('app-window', 'size-9'));
       const t = document.createElement('div'); t.textContent = 'No open windows found'; e.appendChild(t); box.appendChild(e);
     }
   }
@@ -486,7 +500,7 @@
     const q = $('#appsearch').value.trim().toLowerCase();
     const list = appItems.filter((a) => !q || a.name.toLowerCase().includes(q));
     if (!list.length) {
-      const e = document.createElement('div'); e.className = 'empty'; e.appendChild(svg('search'));
+      const e = document.createElement('div'); e.className = 'empty'; e.appendChild(svg('search', 'size-9'));
       const t = document.createElement('div'); t.textContent = q ? 'No apps match "' + $('#appsearch').value.trim() + '"' : 'No apps found'; e.appendChild(t); box.appendChild(e); return;
     }
     const head = (t) => { const h = document.createElement('div'); h.className = 'sec'; h.textContent = t; return h; };
@@ -508,8 +522,10 @@
     setTimeout(() => b.classList.remove('busy'), 1300);
     setTimeout(() => { if (page === 'apps' && appsMode === 'all') appsSeg('open', true); }, 1500);
   };
-  $('#appsearch').oninput = () => { $('#searchbox').classList.toggle('has', !!$('#appsearch').value); renderApps(); };
-  $('#searchclear').onclick = () => { $('#appsearch').value = ''; $('#searchbox').classList.remove('has'); renderApps(); $('#appsearch').focus(); };
+  const syncClear = () => { $('#searchclear').hidden = !$('#appsearch').value; };
+  $('#appsearch').oninput = () => { syncClear(); renderApps(); };
+  $('#searchclear').onclick = () => { $('#appsearch').value = ''; syncClear(); renderApps(); $('#appsearch').focus(); };
+  syncClear();
   setInterval(() => { if (page === 'apps' && appsMode === 'open' && online && !document.hidden) send({ t: 'win.list' }); }, 3000);
   renderWins();
 
@@ -531,7 +547,7 @@
     $('#np-artist').textContent = has ? np.artist || np.app : 'Start something on your PC';
     $('#np-app').textContent = has && np.artist ? np.app : '';
     $('#np').classList.toggle('idle', !has);
-    $('#pp use').setAttribute('href', playing ? '#i-pause' : '#i-play');
+    $('#pp use').setAttribute('href', playing ? '#pause' : '#play');
     const key = has ? [np.title, np.artist, np.app, np.art].join('|') : '';
     if (key !== npKey) {   // a new track: reload the cover
       npKey = key; npImg.hidden = true;
@@ -542,7 +558,7 @@
     if (show) {
       const pos = Math.min(np.dur, np.pos + (playing ? (performance.now() - npAt) / 1000 : 0));
       $('#np-pos').textContent = fmtT(pos); $('#np-dur').textContent = fmtT(np.dur);
-      $('#np-fill').style.transform = 'scaleX(' + (pos / np.dur).toFixed(4) + ')';
+      $('#np-fill').style.width = (pos / np.dur * 100).toFixed(2) + '%';
     }
   }
 
@@ -551,7 +567,7 @@
     e.preventDefault();
     let u = $('#urlin').value.trim(); if (!u) return;
     if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
-    send({ t: 'open', url: u }); $('#urlin').value = ''; toast('Opening on the computer', { icon: 'external' }); buzz();
+    send({ t: 'open', url: u }); $('#urlin').value = ''; toast('Opening on the computer', { icon: 'external-link' }); buzz();
   };
   // ---- clipboard: one box to send (text or a photo), one button to fetch
   const clipText = $('#cliptext'), say = (msg, kind) => { const el = $('#clipmsg'); el.textContent = msg; el.classList.toggle('bad', kind === 'bad'); el.classList.toggle('ok', kind === 'ok'); };
@@ -671,44 +687,31 @@
   });
 
   // ============================================================ bottom sheet
-  const sheet = $('#sheet'), scrim = $('#scrim');
+  // A native <dialog class="sheet">: the kit (kit/ui.js) handles the backdrop tap and the drag-down dismiss.
+  const sheet = $('#sheet');
   const TITLES = { more: 'More', browser: 'Browser', keys: 'Special keys', clip: 'Clipboard', power: 'Power', settings: 'Settings' };
   let sheetOpen = false, stack = ['more'];
   function showView(id) {
     $$('.sh-view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + id));
     $('#sh-title').textContent = TITLES[id]; sheet.classList.toggle('deep', stack.length > 1);
-    $('.sh-body').scrollTop = 0;
+    sheet.scrollTop = 0;
   }
   function openSheet(id = 'more') {
     stack = id === 'more' ? ['more'] : ['more', id];
-    showView(id); sheetOpen = true; sheet.classList.add('show'); scrim.classList.add('show'); paintNav();
+    showView(id); sheetOpen = true; if (!sheet.open) sheet.showModal(); paintNav();
   }
-  function closeSheet() { if (!sheetOpen) return; sheetOpen = false; sheet.classList.remove('show'); scrim.classList.remove('show'); paintNav(); }
-  $$('[data-open]').forEach((t) => { t.onclick = () => { stack.push(t.dataset.open); showView(t.dataset.open); }; });
+  function closeSheet() { if (sheet.open) sheet.close(); }
+  sheet.addEventListener('close', () => { sheetOpen = false; paintNav(); });   // also fires for Escape, backdrop tap and drag-down
+  $$('[data-view]').forEach((t) => { t.onclick = () => { stack.push(t.dataset.view); showView(t.dataset.view); }; });
   $('#sh-back').onclick = () => { if (stack.length > 1) { stack.pop(); showView(stack[stack.length - 1]); } };
-  $('#sh-close').onclick = closeSheet; scrim.onclick = closeSheet;
-  // drag the grab handle or header down to dismiss
-  (function dragDismiss() {
-    let y0 = null, dy = 0, t0 = 0;
-    const down = (e) => { if (e.target.closest('button')) return; y0 = e.clientY; dy = 0; t0 = performance.now(); sheet.classList.add('drag'); e.currentTarget.setPointerCapture(e.pointerId); };
-    const move = (e) => { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); sheet.style.transform = 'translateY(' + dy + 'px)'; scrim.style.opacity = String(Math.max(0, 1 - dy / 420)); };
-    const up = () => {
-      if (y0 == null) return;
-      sheet.classList.remove('drag'); sheet.style.transform = ''; scrim.style.opacity = '';
-      if (dy > 110 || dy / Math.max(1, performance.now() - t0) > 0.6) closeSheet();
-      y0 = null;
-    };
-    ['sh-grab', 'sh-head'].forEach((id) => { const el = $('#' + id); el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); });
-  })();
+  $('#sh-close').onclick = closeSheet;
 
   // ============================================================ pages + bottom nav
   const PAGES = ['pad', 'type', 'apps', 'media'];
   let page = store.get('or_page', 'pad'); if (!PAGES.includes(page)) page = 'pad';
   function paintNav() {
-    const idx = sheetOpen ? 4 : PAGES.indexOf(page);
-    $('#nav-ind').style.setProperty('--i', idx);
-    $$('#nav [data-go]').forEach((b) => b.classList.toggle('on', !sheetOpen && b.dataset.go === page));
-    $('#nav [data-more]').classList.toggle('on', sheetOpen);
+    $$('#nav [data-go]').forEach((b) => b.setAttribute('aria-selected', !sheetOpen && b.dataset.go === page));
+    $('#nav [data-more]').setAttribute('aria-selected', sheetOpen);
   }
   function go(name) {
     const idx = PAGES.indexOf(name);

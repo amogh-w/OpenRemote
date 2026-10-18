@@ -1,6 +1,6 @@
 # Third-party material
 
-## Lucide icons (`assets/ui/icons.html`)
+## Lucide icons (`assets/ui/icons.html`, built from `assets/ui/kit/icons.txt`)
 
 ISC License. Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
 All other copyright (c) for Lucide are held by Lucide Contributors 2022.
@@ -14,6 +14,6 @@ ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVE
 DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-## Catppuccin palette (`assets/ui/palette.css`)
+## Catppuccin palette (`assets/ui/kit/palette.css`)
 
 MIT License, Catppuccin Org. See https://github.com/catppuccin/palette.

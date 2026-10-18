@@ -1,0 +1,15 @@
+{
+  "name": "openremote-ui",
+  "private": true,
+  "description": "Build-time only: compiles the web app stylesheet and icon sprite. The Rust build does not need Node.",
+  "scripts": {
+    "icons": "node assets/ui/kit/icons.mjs --list assets/ui/kit/icons.txt --out assets/ui/icons.html",
+    "css": "tailwindcss -i assets/ui/kit/entry.css -o assets/ui/app.css --minify",
+    "build": "npm run icons && npm run css"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.11",
+    "lucide-static": "0.540.0",
+    "tailwindcss": "4.1.11"
+  }
+}

@@ -1,6 +1,8 @@
 //! Command layer: typed client messages and the dispatcher that turns them into input events.
 
+use crate::smooth::Smoother;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -205,12 +207,36 @@ const MAX_MOVE: i32 = 5000;
 const MAX_TEXT_UNITS: usize = 2000;
 
 pub struct Dispatcher<I: Injector> {
-    inj: I,
+    inj: Arc<I>,
+    /// Paces pointer movement (see `smooth.rs`); `None` injects every move the moment it arrives.
+    smooth: Option<Arc<Smoother>>,
+}
+
+impl<I: Injector + 'static> Dispatcher<I> {
+    /// Pointer moves are paced by a `Smoother` with time constant `tau_ms` (0 turns smoothing off).
+    pub fn with_smoothing(inj: I, tau_ms: u32) -> Self {
+        let inj = Arc::new(inj);
+        let smooth = (tau_ms > 0).then(|| {
+            let s = Arc::new(Smoother::new(f64::from(tau_ms)));
+            let target = Arc::clone(&inj);
+            s.spawn(move |dx, dy| target.move_rel(dx, dy));
+            s
+        });
+        Self { inj, smooth }
+    }
 }
 
 impl<I: Injector> Dispatcher<I> {
+    /// Moves are injected as they arrive.
     pub fn new(inj: I) -> Self {
-        Self { inj }
+        Self { inj: Arc::new(inj), smooth: None }
+    }
+
+    /// Release everything the smoother still holds, so a click or scroll happens where the finger stopped.
+    fn settle(&self) {
+        if let Some(s) = &self.smooth {
+            s.flush(&mut |dx, dy| self.inj.move_rel(dx, dy));
+        }
     }
 
     /// Apply a message; returns a reply for the client when the message asks for one.
@@ -241,18 +267,26 @@ impl<I: Injector> Dispatcher<I> {
         }
         match msg {
             &Msg::Move { dx, dy } => {
-                self.inj.move_rel(dx.clamp(-MAX_MOVE, MAX_MOVE), dy.clamp(-MAX_MOVE, MAX_MOVE));
-            }
-            Msg::Btn { b, s } => match s {
-                BtnAct::Down => self.inj.button(*b, true),
-                BtnAct::Up => self.inj.button(*b, false),
-                BtnAct::Click => self.click(*b),
-                BtnAct::Dbl => {
-                    self.click(*b);
-                    self.click(*b);
+                let (dx, dy) = (dx.clamp(-MAX_MOVE, MAX_MOVE), dy.clamp(-MAX_MOVE, MAX_MOVE));
+                match &self.smooth {
+                    Some(s) => s.push(dx, dy),
+                    None => self.inj.move_rel(dx, dy),
                 }
-            },
+            }
+            Msg::Btn { b, s } => {
+                self.settle();
+                match s {
+                    BtnAct::Down => self.inj.button(*b, true),
+                    BtnAct::Up => self.inj.button(*b, false),
+                    BtnAct::Click => self.click(*b),
+                    BtnAct::Dbl => {
+                        self.click(*b);
+                        self.click(*b);
+                    }
+                }
+            }
             &Msg::Scroll { dx, dy } => {
+                self.settle();
                 if dy != 0 {
                     self.inj.wheel(false, -dy.clamp(-MAX_MOVE, MAX_MOVE));
                 }
@@ -513,6 +547,32 @@ mod tests {
         assert_eq!(run(r#"{"t":"btn","b":"right","s":"down"}"#), ["btn Right true"]);
         assert_eq!(run(r#"{"t":"btn","b":"middle","s":"up"}"#), ["btn Middle false"]);
         assert_eq!(run(r#"{"t":"btn","b":"left","s":"dbl"}"#).len(), 4);
+    }
+
+    #[test]
+    fn smoothed_moves_arrive_in_pieces_and_a_click_never_overtakes_them() {
+        let rec = Arc::new(Rec::default());
+        let d = Dispatcher::with_smoothing(rec.clone(), 15);
+        let total = |log: &[String]| -> (i32, i32) {
+            log.iter().filter_map(|l| l.strip_prefix("move ")).fold((0, 0), |a, l| {
+                let mut p = l.split(' ').map(|n| n.parse::<i32>().unwrap());
+                (a.0 + p.next().unwrap(), a.1 + p.next().unwrap())
+            })
+        };
+        d.handle(&serde_json::from_str(r#"{"t":"move","dx":60,"dy":-30}"#).unwrap());
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        let log = rec.take();
+        assert!(log.len() > 2, "the move should be spread over several steps: {log:?}");
+        assert_eq!(total(&log), (60, -30));
+
+        // a click right behind a move: the whole move lands first, then the click
+        d.handle(&serde_json::from_str(r#"{"t":"move","dx":40,"dy":0}"#).unwrap());
+        d.handle(&serde_json::from_str(r#"{"t":"btn","b":"left","s":"click"}"#).unwrap());
+        let log = rec.take();
+        let click = log.iter().position(|l| l == "btn Left true").expect("click present");
+        assert_eq!(total(&log[..click]), (40, 0), "{log:?}");
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        assert_eq!(total(&rec.take()), (0, 0), "nothing should trail the click");
     }
 
     #[test]

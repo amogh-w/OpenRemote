@@ -1,0 +1,238 @@
+/* App-specific styles on top of the cuppa-ui kit (kit/kit.css). Only what the kit has no component for:
+   the touchpad, the on-screen keyboard, the page shell and the lists the script builds.
+   Tokens only, no hex. Kit classes (btn, row, chip, ...) are used in the markup, not re-applied here. */
+
+@layer base {
+  [hidden] { display: none !important; }
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  input, textarea { -webkit-user-select: text; user-select: text; }
+  html, body { height: 100%; overscroll-behavior: none; overflow: hidden; }
+  button { touch-action: manipulation; }
+}
+
+@layer components {
+  /* ---- shell ---- */
+  #app { position: relative; margin-inline: auto; display: flex; height: 100dvh; max-width: 900px; flex-direction: column; }
+  #top { display: flex; flex: none; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 8px) 16px 6px; }
+  #chip { @apply flex min-w-0 items-center gap-3 text-[15px] text-subtext1; }
+  #chip #status { @apply truncate; }
+  .dot { @apply size-2.5 shrink-0 rounded-full bg-red transition-colors duration-200; }
+  .dot.on { @apply bg-green; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ctp-green) 25%, transparent); }
+  .dot.wait { @apply bg-yellow; animation: pulse 1.3s ease-out infinite; }
+
+  #stage { position: relative; min-height: 0; flex: 1; }
+  .page {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 10px;
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+    opacity: 0; visibility: hidden; transform: translateX(var(--off, 0px));
+    transition: opacity 0.26s var(--ease), transform 0.26s var(--ease), visibility 0s linear 0.26s;
+  }
+  .page::-webkit-scrollbar { display: none; }
+  .page.on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+
+  #nav { flex: none; padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
+  #nav .tab { @apply min-h-11 flex-1 justify-center; }
+
+  /* ---- small helpers ---- */
+  .glabel { @apply mt-5 mb-2 px-1 text-xs font-semibold tracking-wider text-subtext0 uppercase; }
+  .glabel:first-child { margin-top: 4px; }
+  .hint { @apply text-[13px] leading-relaxed text-subtext0; }
+  .hint.bad { @apply text-red; }
+  .hint.ok { @apply text-green; }
+  .chips { display: flex; flex: none; gap: 8px; overflow-x: auto; padding: 2px 0; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips .chip { flex: none; height: 40px; padding-inline: 16px; }
+  .chips .chip:active { @apply bg-accent text-crust; }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+
+  /* ---- touchpad ---- */
+  .padbox { position: relative; min-height: 120px; flex: 1; overflow: hidden; border-radius: var(--r-card); box-shadow: inset 0 0 0 1px var(--ctp-surface0); }
+  .pad {
+    position: absolute; inset: 0; touch-action: none; transition: box-shadow 0.26s var(--ease);
+    background:
+      radial-gradient(color-mix(in srgb, var(--ctp-text) 9%, transparent) 1px, transparent 1.6px) 0 0 / 24px 24px,
+      radial-gradient(120% 90% at 8% 100%, color-mix(in srgb, var(--ctp-text) 8%, transparent), transparent 55%),
+      radial-gradient(90% 80% at 92% 0%, color-mix(in srgb, var(--accent) 40%, var(--ctp-base)), transparent 74%),
+      linear-gradient(160deg, color-mix(in srgb, var(--accent) 18%, var(--ctp-base)), color-mix(in srgb, var(--accent) 6%, var(--ctp-crust)));
+  }
+  .pad.hold { box-shadow: inset 0 0 0 3px var(--accent); }
+  .gchip { @apply pointer-events-none absolute top-3 left-3 z-[3] flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5 text-[13px] font-semibold text-text; background: color-mix(in srgb, var(--ctp-crust) 72%, transparent); opacity: 0; transform: translateY(-6px) scale(0.96); transition: opacity 0.26s var(--ease), transform 0.26s var(--ease); }
+  .gchip.show { opacity: 1; transform: none; }
+  .strip { @apply absolute top-3 right-2.5 bottom-3 z-[2] flex w-9 flex-col items-center justify-between rounded-full py-1.5 text-overlay1 transition-colors duration-200; background: color-mix(in srgb, var(--ctp-text) 10%, transparent); touch-action: none; }
+  .strip.drag { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  .strip .mid { opacity: 0.5; }
+  .ripple { position: absolute; z-index: 1; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: color-mix(in srgb, var(--ctp-text) 38%, transparent); pointer-events: none; animation: ripple 0.6s var(--ease) forwards; }
+  .coach { @apply absolute inset-0 z-[4] flex items-center justify-center p-4; background: color-mix(in srgb, var(--ctp-crust) 58%, transparent); opacity: 0; pointer-events: none; transition: opacity 0.26s var(--ease); }
+  .coach.show { opacity: 1; pointer-events: auto; }
+  .coach .box { @apply w-[min(100%,340px)] rounded-sheet bg-base p-5 shadow-[var(--shadow-3)]; transform: translateY(10px) scale(0.97); transition: transform 0.4s var(--ease); }
+  .coach.show .box { transform: none; }
+  .coach h3 { @apply mb-2 text-xl font-semibold; }
+  .crow { @apply flex items-center gap-3 py-2 text-[15px]; }
+  .crow .ic { @apply grid size-9 shrink-0 place-items-center rounded-ctl bg-accent/15 text-accent; }
+  .crow small { @apply block text-[13px] text-subtext0; }
+
+  .mbtns { display: grid; flex: none; height: 64px; grid-template-columns: 5fr 2fr 5fr; gap: 10px; }
+  .mbtn { height: 100%; flex-direction: column; gap: 2px; padding-inline: 0; font-size: 13px; border-radius: var(--r-card); }
+  .mbtn svg { @apply text-accent; }
+  .mbtn.down { @apply bg-accent text-crust; transform: scale(0.97); }
+  .mbtn.down svg { @apply text-crust; }
+  .mrow { display: grid; flex: none; height: 44px; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mrow .mbtn { flex-direction: row; gap: 8px; border-radius: var(--r-ctl); }
+
+  /* ---- type page and keys ---- */
+  .type-l { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 8px; }
+  .type-r { display: flex; flex: none; flex-direction: column; gap: 8px; }
+  .kb { position: relative; display: flex; flex-direction: column; gap: 7px; }
+  .kr { display: flex; gap: 6px; }
+  .key { @apply relative flex h-12 min-w-0 flex-1 items-center justify-center rounded-lg bg-base text-xl font-medium text-text; box-shadow: 0 1.5px 0 var(--ctp-crust); transition: transform 0.15s var(--ease), background-color 0.15s; }
+  .key:active { @apply bg-surface1; transform: scale(0.94); }
+  .key.num { @apply h-10 text-base text-subtext0; }
+  .key.fn { @apply bg-surface0 text-[14px] font-semibold; }
+  .key.go { @apply bg-accent text-[14px] font-bold text-crust; }
+  .key.on { @apply bg-accent/20 text-accent; }
+  .key.caps { @apply bg-accent text-crust; }
+  .key.on svg, .key.caps svg { fill: currentColor; }
+  .w15 { flex: 1.5; } .w2 { flex: 2; } .w4 { flex: 4; } .w14 { flex: 1.4; }
+  .keypop { @apply pointer-events-none absolute z-[6] grid h-[60px] w-[54px] place-items-center rounded-2xl bg-surface1 text-3xl font-medium shadow-[var(--shadow-2)]; opacity: 0; transform: translate(-50%, -100%) scale(0.9); transition: opacity 60ms linear, transform 90ms var(--ease); }
+  .keypop.show { opacity: 1; transform: translate(-50%, calc(-100% - 8px)) scale(1); }
+  .keys2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .keys2 .kr { margin-bottom: 6px; }
+  .keys2 .key { @apply h-[46px] bg-surface0 text-[14px] font-semibold; }
+  .keys2 .key.fn { @apply bg-surface1; }
+  .keys2 .key.go { @apply bg-accent text-crust; }
+  .frow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .frow .key { @apply h-11 bg-surface0 text-[14px] font-semibold; }
+
+  /* ---- apps ---- */
+  .apps-body { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .apps-body::-webkit-scrollbar { display: none; }
+  #winlist { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; }
+  .wcard { @apply flex items-center gap-3 rounded-card bg-base p-2.5 pr-2 outline-none; cursor: pointer; transition: transform 0.15s var(--ease), background-color 0.15s; }
+  .wcard:active { transform: scale(0.985); }
+  .wcard.fg { box-shadow: inset 0 0 0 2px var(--accent); }
+  .wcard.min { opacity: 0.7; }
+  .wcard.new { animation: rise 0.32s var(--ease) both; animation-delay: calc(var(--n, 0) * 30ms); }
+  .wcard.leave { opacity: 0; transform: scale(0.96); transition: opacity 0.16s, transform 0.16s; }
+  .wcard .ti { min-width: 0; flex: 1; }
+  .wcard .ti b { @apply block truncate text-[16px] font-semibold; }
+  .wcard .ti small { @apply flex items-center gap-2 text-[13px] text-subtext0; }
+  .wcard .tag { @apply rounded-full bg-accent/15 px-2 text-xs font-semibold text-accent; display: none; }
+  .wcard.fg .tag { display: inline; }
+  .wcard .acts { display: flex; flex: none; gap: 6px; }
+  .wcard .acts .btn { width: 36px; height: 36px; }
+  .wcard .acts .btn.danger { @apply text-red; }
+  .aic { position: relative; display: grid; flex: none; width: 44px; height: 44px; place-items: center; overflow: hidden; border-radius: 12px; }
+  .aic .fb { @apply size-6 text-overlay1; }
+  .aic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.2s; padding: 4px; }
+  .aic img.ld { opacity: 1; }
+  .aic.fail { @apply bg-surface0; }
+  .sec { @apply mt-4 mb-2 px-1 text-xs font-semibold tracking-wider text-subtext0; }
+  .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px 4px; }
+  .hrow { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+  .hrow .app { width: 78px; flex: none; }
+  .app { @apply flex flex-col items-center gap-1.5 rounded-ctl px-1 py-2 transition; }
+  .app:active { @apply bg-surface0; transform: scale(0.95); }
+  .app.busy { opacity: 0.5; pointer-events: none; }
+  .app .aic { width: 52px; height: 52px; border-radius: 14px; }
+  .app .n { @apply line-clamp-2 w-full text-center text-xs leading-tight text-subtext1; }
+  .skel.sq { @apply aspect-square rounded-ctl; }
+  .empty { @apply flex flex-col items-center gap-2 py-12 text-center text-subtext0; }
+  .empty svg { @apply size-9 text-overlay1; }
+
+  /* ---- media ---- */
+  .np-top { display: flex; align-items: center; gap: 14px; }
+  .np-art { @apply relative grid size-20 shrink-0 place-items-center overflow-hidden rounded-card bg-surface0 text-overlay1; }
+  .np-art svg { @apply size-8; }
+  .np-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .np-meta { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+  .np-meta b { @apply truncate text-[19px] font-semibold; }
+  .np-meta span { @apply truncate text-[15px] text-subtext1; }
+  .np-meta small { @apply truncate text-[13px] text-subtext0; }
+  #np.idle .np-meta b { @apply text-subtext1; }
+  .np-prog { @apply mt-4 flex items-center gap-2.5 text-xs text-subtext0 tabular-nums; }
+  .np-prog .bar { flex: 1; }
+  .np-prog .bar > i { transition: width 0.5s linear; }
+  .transport { @apply mt-3 flex items-center justify-center gap-6; }
+  .transport .big { width: 64px; height: 64px; padding: 0; border-radius: 9999px; }
+  .volrow { @apply grid grid-cols-3 gap-2.5; }
+  .vbtn { @apply flex h-16 flex-col gap-0.5 text-[13px]; }
+
+  /* ---- sheet ---- */
+  #sheet { max-height: 88dvh; overflow-y: auto; padding-bottom: env(safe-area-inset-bottom); }
+  #sheet .sh-top { @apply sticky top-0 z-10 bg-base px-4 pt-3 pb-2; }
+  #sheet .sh-head { display: flex; align-items: center; gap: 8px; }
+  #sheet .sh-head h2 { @apply flex-1 text-center text-[17px] font-semibold; }
+  #sheet .sh-body { padding: 4px 16px 24px; }
+  #sheet .sh-view { display: none; }
+  #sheet .sh-view.on { display: block; animation: viewin 0.26s var(--ease) both; }
+  #sheet .group-list { @apply bg-mantle; }
+  #sheet .row { @apply w-full text-left; }
+  #sheet .row small { @apply block text-[13px] text-subtext0; }
+  #sheet .row.arm { background: color-mix(in srgb, var(--ctp-red) 14%, transparent); }
+  #sheet .row.arm small { @apply text-red; }
+  #sheet #sh-back { visibility: hidden; }
+  #sheet.deep #sh-back { visibility: visible; }
+  .clipcard { @apply rounded-card bg-mantle p-3; }
+  .clipcard textarea { @apply w-full resize-none bg-transparent text-[16px] outline-none placeholder:text-overlay1; min-height: 96px; }
+  .attach { @apply mt-2 flex items-center gap-3 border-t border-surface0 pt-2 text-[13px] text-subtext0; }
+  .attach img { @apply size-12 rounded-lg object-cover; }
+  .attach span { flex: 1; }
+  #pctext { @apply text-[15px] break-words whitespace-pre-wrap; user-select: text; -webkit-user-select: text; }
+  #imgpc { @apply mt-2 max-h-64 w-full rounded-lg object-contain; -webkit-touch-callout: default; user-select: auto; }
+  .btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .srow { @apply flex flex-col items-stretch gap-2; }
+  .srow.inline { @apply flex-row items-center justify-between; }
+  .srow .val { @apply text-subtext0 tabular-nums; }
+  .flavors { @apply flex flex-wrap gap-2; }
+  .accents { @apply flex gap-3; }
+  .accents button { @apply grid size-9 place-items-center rounded-full text-crust; }
+  .accents button svg { @apply size-5 opacity-0; }
+  .accents button.on { box-shadow: 0 0 0 2px var(--ctp-base), 0 0 0 4px var(--ctp-text); }
+  .accents button.on svg { opacity: 1; }
+
+  /* ---- pairing screen ---- */
+  #pair { @apply fixed inset-0 z-50 grid place-items-center bg-mantle p-6; }
+  .pair-box { @apply flex w-full max-w-[360px] flex-col items-center gap-3 text-center; }
+  .pair-box p { @apply text-[15px] text-subtext1; }
+  .pair-ic { @apply grid size-16 place-items-center rounded-full bg-accent/15 text-accent; }
+  .pair-ic svg { @apply size-8; }
+  #pairform { display: flex; width: 100%; gap: 10px; }
+  #paircode { text-align: center; letter-spacing: 0.2em; font-size: 20px; }
+
+  #sysin { position: fixed; left: -1000px; top: 0; width: 10px; height: 10px; opacity: 0; }
+
+  /* ---- toast ---- */
+  #toast { @apply pointer-events-none fixed left-1/2 z-[60] max-w-[calc(100vw-32px)]; top: calc(env(safe-area-inset-top) + 12px); animation: none; opacity: 0; transform: translate(-50%, -140%); transition: transform 0.4s var(--ease), opacity 0.2s; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast svg { @apply text-blue; }
+  #toast.bad svg { @apply text-red; }
+}
+
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ctp-yellow) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+@keyframes ripple { from { transform: scale(1); opacity: 0.65; } to { transform: scale(9); opacity: 0; } }
+@keyframes viewin { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+
+/* ---- landscape phones: navigation becomes a side rail ---- */
+@media (orientation: landscape) and (max-height: 520px) {
+  #app { display: grid; grid-template-columns: 84px 1fr; grid-template-rows: auto 1fr; }
+  #top { grid-column: 2; grid-row: 1; padding: 6px 12px 2px; }
+  #stage { grid-column: 2; grid-row: 2; }
+  #nav { grid-column: 1; grid-row: 1 / 3; flex-direction: column; justify-content: stretch; border-top: 0; border-right: 1px solid var(--ctp-surface0); padding: calc(env(safe-area-inset-top) + 6px) 6px 6px; }
+  #nav .tab { min-height: 0; }
+  .page { padding: 4px 12px 8px; }
+  #pg-pad { display: grid; grid-template-columns: 1fr 150px; grid-template-rows: 1fr auto; column-gap: 10px; }
+  #pg-pad .padbox { grid-row: 1 / 3; }
+  #pg-pad .mbtns { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr 1fr; height: auto; }
+  #pg-pad .chips { flex-wrap: wrap; overflow: visible; }
+  #pg-pad .chips .chip { height: 34px; padding-inline: 11px; font-size: 13px; }
+  #pg-media { flex-direction: row; flex-wrap: wrap; align-items: center; align-content: center; }
+  #pg-media .card { flex: 1 1 40%; }
+  #pg-media .mfull { flex: 1 1 100%; }
+  #pg-type { flex-direction: row; gap: 12px; }
+  .type-r { flex: 1.5; justify-content: flex-end; }
+  .key { height: 38px; font-size: 17px; }
+  .key.num { height: 30px; font-size: 14px; }
+  .kb { gap: 5px; }
+  .coach .box { padding: 12px 14px; }
+  .crow { padding-block: 4px; }
+}

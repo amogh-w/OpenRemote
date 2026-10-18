@@ -1,0 +1,75 @@
+# Lucide icons used by the web app (ISC license, see THIRD_PARTY.md). One name per line.
+# Rebuild with: npm run build   (writes assets/ui/icons.html)
+# navigation
+touchpad
+keyboard
+layout-grid
+circle-play
+ellipsis
+# pad
+mouse
+mouse-pointer-2
+mouse-pointer-click
+hand
+pointer
+move
+grip-vertical
+circle-question-mark
+# media
+play
+pause
+skip-back
+skip-forward
+volume-1
+volume-2
+volume-x
+fullscreen
+music
+# windows and apps
+app-window
+maximize-2
+minimize-2
+x
+search
+refresh-cw
+check
+# arrows
+chevron-left
+chevron-right
+chevron-up
+chevron-down
+arrow-left
+arrow-right
+arrow-up
+arrow-down
+# keyboard
+corner-down-left
+delete
+arrow-big-up
+arrow-big-up-dash
+command
+globe
+# sheets and settings
+settings
+panel-top
+clipboard-copy
+image
+power
+monitor
+house
+external-link
+copy
+plus
+minus
+smartphone
+info
+wifi
+wifi-off
+circle-check
+shield-check
+# power
+rotate-cw
+moon
+lock
+log-out
+arrow-down-to-line

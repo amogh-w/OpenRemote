@@ -76,6 +76,7 @@ Options:
 | `--hostname NAME` | name shown on the phone (default: computer name) |
 | `--pairing` / `--no-pairing` | require phones to pair (the default) or not (saved) |
 | `--autostart` / `--no-autostart` | start with Windows for this user (also a toggle in the tray menu) |
+| `--smoothing MS` | pointer smoothing time constant (default 15; 0 turns it off). Higher glides more but adds delay |
 | `--no-tray` | no tray icon; run in the foreground |
 | `--install-helper --yes` | install the SYSTEM input helper (needs administrator approval on the PC) |
 | `--uninstall-helper` | remove the helper |
@@ -208,11 +209,12 @@ Read before turning it on:
 
 ```
 src/            Rust server (see Architecture)
-assets/ui/      Web app sources: head.html, palette.css, app.css, icons.html, body.html, app.js
+assets/ui/      Web app sources: head.html, body.html, app.js, app.src.css; kit/ (cuppa-ui kit); generated app.css and icons.html
 assets/         sw.js (service worker), PWA and tray icons
-build.rs        Joins assets/ui/* into one page
+build.rs        Joins assets/ui/* into one page (no Node needed)
+package.json    Build-time only: `npm run build` regenerates app.css and the icon sprite
 tests/ws.rs     End-to-end tests: real server + WebSocket client + mock injector
-tools/          gen_icons.py (app icons), fetch_lucide.py (icon sprite)
+tools/          gen_icons.py (app icons)
 docs/           theme-config.md (Catppuccin role mapping), screenshots/
 DESIGN.md       Feature inventory and design notes
 ```
@@ -223,7 +225,7 @@ DESIGN.md       Feature inventory and design notes
 cargo test                          # unit + end-to-end tests
 node --check assets/ui/app.js       # syntax-check the web app script
 cargo build --release               # stop a running openremote.exe first (it locks the file)
-python tools/fetch_lucide.py        # regenerate the icon sprite (needs network)
+npm install && npm run build        # regenerate assets/ui/app.css and icons.html after UI changes (needs Node)
 python tools/gen_icons.py           # regenerate PWA and tray icons (needs Pillow)
 ```
 

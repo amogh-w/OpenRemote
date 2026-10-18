@@ -1,0 +1,16 @@
+/* Tailwind entry for the web app: the cuppa-ui kit plus app-specific styles.
+   Build: npm run css  (writes assets/ui/app.css, which build.rs inlines into the page). */
+@import "./kit.css";
+@import "../app.src.css";
+
+/* Only the web app's markup and script define classes; keep the Rust sources, docs and tools out of the scan. */
+@source "../body.html";
+@source "../app.js";
+@source not "../../../src";
+@source not "../../../tests";
+@source not "../../../docs";
+@source not "../../../tools";
+@source not "../../../README.md";
+@source not "../../../DESIGN.md";
+@source not "../../../CLAUDE.md";
+@source not "../../../THIRD_PARTY.md";

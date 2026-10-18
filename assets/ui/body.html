@@ -2,9 +2,9 @@
   <header id="top">
     <div id="chip" role="status">
       <span class="dot wait" id="dot"></span>
-      <span class="txt"><b id="hostname">OpenRemote</b><small id="status">Connecting...</small></span>
+      <span id="status">Connecting...</span>
     </div>
-    <button class="roundbtn" id="help" aria-label="Gesture help"><svg class="i"><use href="#i-help"/></svg></button>
+    <button class="btn btn-icon btn-gray ml-auto" id="help" aria-label="Gesture help"><svg class="size-5"><use href="#circle-question-mark"/></svg></button>
   </header>
 
   <main id="stage">
@@ -12,33 +12,33 @@
     <section class="page on" id="pg-pad" data-page="pad">
       <div class="padbox">
         <div class="pad" id="pad"></div>
-        <div class="gchip"><svg class="i"><use href="#i-pointer"/></svg><span></span></div>
-        <div class="strip" id="strip" aria-label="Scroll"><svg class="i"><use href="#i-up"/></svg><svg class="i mid"><use href="#i-grip"/></svg><svg class="i"><use href="#i-down"/></svg></div>
+        <div class="gchip"><svg class="size-4"><use href="#pointer"/></svg><span></span></div>
+        <div class="strip" id="strip" aria-label="Scroll"><svg class="size-4"><use href="#chevron-up"/></svg><svg class="mid size-4"><use href="#grip-vertical"/></svg><svg class="size-4"><use href="#chevron-down"/></svg></div>
         <div class="coach" id="coach">
           <div class="box">
             <h3>Touchpad gestures</h3>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-move"/></svg></span><div>Drag<small>Move the pointer</small></div></div>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-pointer"/></svg></span><div>Tap<small>Left click</small></div></div>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-hand"/></svg></span><div>Two-finger tap<small>Right click</small></div></div>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-mouse"/></svg></span><div>Two fingers, drag<small>Scroll (or use the strip on the right)</small></div></div>
-            <div class="row"><span class="ic"><svg class="i"><use href="#i-click"/></svg></span><div>Tap, then hold and drag<small>Drag and drop</small></div></div>
-            <button class="btn" id="coach-ok">Got it</button>
+            <div class="crow"><span class="ic"><svg class="size-5"><use href="#move"/></svg></span><div>Drag<small>Move the pointer</small></div></div>
+            <div class="crow"><span class="ic"><svg class="size-5"><use href="#pointer"/></svg></span><div>Tap<small>Left click</small></div></div>
+            <div class="crow"><span class="ic"><svg class="size-5"><use href="#hand"/></svg></span><div>Two-finger tap<small>Right click</small></div></div>
+            <div class="crow"><span class="ic"><svg class="size-5"><use href="#mouse"/></svg></span><div>Two fingers, drag<small>Scroll (or use the strip on the right)</small></div></div>
+            <div class="crow"><span class="ic"><svg class="size-5"><use href="#mouse-pointer-click"/></svg></span><div>Tap, then hold and drag<small>Drag and drop</small></div></div>
+            <button class="btn btn-filled" id="coach-ok">Got it</button>
           </div>
         </div>
       </div>
       <div class="mbtns">
-        <button class="mbtn" data-btn="left"><svg class="i"><use href="#i-click"/></svg>Left click</button>
-        <button class="mbtn" data-btn="middle" aria-label="Middle click"><svg class="i"><use href="#i-mouse"/></svg>Mid</button>
-        <button class="mbtn" data-btn="right"><svg class="i"><use href="#i-click"/></svg>Right click</button>
+        <button class="btn btn-gray mbtn" data-btn="left"><svg class="size-5"><use href="#mouse-pointer-click"/></svg>Left click</button>
+        <button class="btn btn-gray mbtn" data-btn="middle" aria-label="Middle click"><svg class="size-5"><use href="#mouse"/></svg>Mid</button>
+        <button class="btn btn-gray mbtn" data-btn="right"><svg class="size-5"><use href="#mouse-pointer-click"/></svg>Right click</button>
       </div>
       <div class="chips">
-        <button class="chip2" data-key="esc">Esc</button>
-        <button class="chip2" data-key="tab">Tab</button>
-        <button class="chip2" data-mod="ctrl">Ctrl</button>
-        <button class="chip2" data-mod="alt">Alt</button>
-        <button class="chip2" data-mod="shift">Shift</button>
-        <button class="chip2" data-mod="win">Win</button>
-        <button class="chip2" data-key="delete">Del</button>
+        <button class="chip" data-key="esc">Esc</button>
+        <button class="chip" data-key="tab">Tab</button>
+        <button class="chip" data-mod="ctrl" aria-pressed="false">Ctrl</button>
+        <button class="chip" data-mod="alt" aria-pressed="false">Alt</button>
+        <button class="chip" data-mod="shift" aria-pressed="false">Shift</button>
+        <button class="chip" data-mod="win" aria-pressed="false">Win</button>
+        <button class="chip" data-key="delete">Del</button>
       </div>
     </section>
 
@@ -47,25 +47,25 @@
       <div class="type-l">
         <div class="padbox">
           <div class="pad" id="pad2"></div>
-          <div class="gchip"><svg class="i"><use href="#i-pointer"/></svg><span></span></div>
+          <div class="gchip"><svg class="size-4"><use href="#pointer"/></svg><span></span></div>
         </div>
         <div class="mrow">
-          <button class="mbtn" data-btn="left">Left</button>
-          <button class="mbtn" data-btn="right">Right</button>
+          <button class="btn btn-gray mbtn" data-btn="left">Left</button>
+          <button class="btn btn-gray mbtn" data-btn="right">Right</button>
         </div>
       </div>
       <div class="type-r">
         <div class="chips">
-          <button class="chip2" data-key="esc">Esc</button>
-          <button class="chip2" data-key="tab">Tab</button>
-          <button class="chip2" data-mod="ctrl">Ctrl</button>
-          <button class="chip2" data-mod="alt">Alt</button>
-          <button class="chip2" data-mod="win">Win</button>
-          <button class="chip2" data-key="delete">Del</button>
-          <button class="chip2" data-key="left" data-repeat aria-label="Left"><svg class="i"><use href="#i-arrow-left"/></svg></button>
-          <button class="chip2" data-key="up" data-repeat aria-label="Up"><svg class="i"><use href="#i-arrow-up"/></svg></button>
-          <button class="chip2" data-key="down" data-repeat aria-label="Down"><svg class="i"><use href="#i-arrow-down"/></svg></button>
-          <button class="chip2" data-key="right" data-repeat aria-label="Right"><svg class="i"><use href="#i-arrow-right"/></svg></button>
+          <button class="chip" data-key="esc">Esc</button>
+          <button class="chip" data-key="tab">Tab</button>
+          <button class="chip" data-mod="ctrl" aria-pressed="false">Ctrl</button>
+          <button class="chip" data-mod="alt" aria-pressed="false">Alt</button>
+          <button class="chip" data-mod="win" aria-pressed="false">Win</button>
+          <button class="chip" data-key="delete">Del</button>
+          <button class="chip" data-key="left" data-repeat aria-label="Left"><svg class="size-4"><use href="#arrow-left"/></svg></button>
+          <button class="chip" data-key="up" data-repeat aria-label="Up"><svg class="size-4"><use href="#arrow-up"/></svg></button>
+          <button class="chip" data-key="down" data-repeat aria-label="Down"><svg class="size-4"><use href="#arrow-down"/></svg></button>
+          <button class="chip" data-key="right" data-repeat aria-label="Right"><svg class="size-4"><use href="#arrow-right"/></svg></button>
         </div>
         <div class="kb" id="kbd"></div>
       </div>
@@ -73,11 +73,11 @@
 
     <!-- APPS -->
     <section class="page" id="pg-apps" data-page="apps">
-      <div class="seg2" id="apps-seg" style="--n:2"><span class="thumb"></span><button data-v="open" class="on">Windows</button><button data-v="all">Apps</button></div>
-      <div class="search" id="searchbox" hidden>
-        <svg class="i sm"><use href="#i-search"/></svg>
-        <input id="appsearch" type="search" placeholder="Search apps" autocapitalize="off" autocomplete="off" spellcheck="false">
-        <button class="iconbtn" id="searchclear" aria-label="Clear search"><svg class="i"><use href="#i-x"/></svg></button>
+      <div class="seg seg-accent !grid w-full" id="apps-seg" data-group><span class="thumb"></span><button data-v="open" aria-pressed="true">Windows</button><button data-v="all" aria-pressed="false">Apps</button></div>
+      <div class="relative" id="searchbox" hidden>
+        <svg class="pointer-events-none absolute top-3 left-3 size-5 text-overlay1"><use href="#search"/></svg>
+        <input class="field rounded-full pr-11 pl-10" id="appsearch" type="search" placeholder="Search apps" aria-label="Search apps" autocapitalize="off" autocomplete="off" spellcheck="false">
+        <button class="absolute top-0 right-0 grid size-11 place-items-center text-overlay1" id="searchclear" aria-label="Clear search"><svg class="size-5"><use href="#x"/></svg></button>
       </div>
       <div class="apps-body" id="appsbody">
         <div id="winlist"></div>
@@ -87,9 +87,9 @@
 
     <!-- MEDIA -->
     <section class="page" id="pg-media" data-page="media">
-      <div class="mcard" id="np">
+      <div class="card" id="np">
         <div class="np-top">
-          <div class="np-art"><svg class="i"><use href="#i-music"/></svg><img id="np-img" alt="" hidden></div>
+          <div class="np-art"><svg><use href="#music"/></svg><img id="np-img" alt="" hidden></div>
           <div class="np-meta">
             <b id="np-title">Nothing playing</b>
             <span id="np-artist">Start something on your PC</span>
@@ -98,76 +98,76 @@
         </div>
         <div class="np-prog" id="np-prog" hidden>
           <span id="np-pos">0:00</span>
-          <div class="np-bar"><i id="np-fill"></i></div>
+          <div class="bar"><i id="np-fill" style="width:0%"></i></div>
           <span id="np-dur">0:00</span>
         </div>
         <div class="transport">
-          <button class="tbtn" data-key="media_prev_track" aria-label="Previous track"><svg class="i"><use href="#i-prev"/></svg></button>
-          <button class="tbtn big" id="pp" data-key="media_play_pause" aria-label="Play or pause"><svg class="i"><use href="#i-play"/></svg></button>
-          <button class="tbtn" data-key="media_next_track" aria-label="Next track"><svg class="i"><use href="#i-next"/></svg></button>
+          <button class="btn btn-icon btn-gray" data-key="media_prev_track" aria-label="Previous track"><svg class="size-5 fill-current"><use href="#skip-back"/></svg></button>
+          <button class="btn btn-filled big" id="pp" data-key="media_play_pause" aria-label="Play or pause"><svg class="size-8 fill-current"><use href="#play"/></svg></button>
+          <button class="btn btn-icon btn-gray" data-key="media_next_track" aria-label="Next track"><svg class="size-5 fill-current"><use href="#skip-forward"/></svg></button>
         </div>
       </div>
-      <div class="mcard">
-        <div class="mlabel">Volume</div>
+      <div class="card">
+        <div class="glabel !mt-0">Volume</div>
         <div class="volrow">
-          <button class="vbtn" data-key="volume_down" data-repeat aria-label="Volume down"><svg class="i"><use href="#i-vol-down"/></svg><span>Down</span></button>
-          <button class="vbtn" data-key="volume_mute" aria-label="Mute"><svg class="i"><use href="#i-mute"/></svg><span>Mute</span></button>
-          <button class="vbtn" data-key="volume_up" data-repeat aria-label="Volume up"><svg class="i"><use href="#i-vol-up"/></svg><span>Up</span></button>
+          <button class="btn btn-gray vbtn" data-key="volume_down" data-repeat aria-label="Volume down"><svg class="size-5"><use href="#volume-1"/></svg><span>Down</span></button>
+          <button class="btn btn-gray vbtn" data-key="volume_mute" aria-label="Mute"><svg class="size-5"><use href="#volume-x"/></svg><span>Mute</span></button>
+          <button class="btn btn-gray vbtn" data-key="volume_up" data-repeat aria-label="Volume up"><svg class="size-5"><use href="#volume-2"/></svg><span>Up</span></button>
         </div>
       </div>
-      <button class="btn ghost mfull" data-key="f11"><svg class="i sm"><use href="#i-fullscreen"/></svg>Toggle fullscreen</button>
+      <button class="btn btn-gray btn-block mfull" data-key="f11"><svg class="size-4"><use href="#fullscreen"/></svg>Toggle fullscreen</button>
     </section>
   </main>
 
-  <nav id="nav" aria-label="Sections">
-    <span id="nav-ind"></span>
-    <button data-go="pad" class="on"><svg class="i"><use href="#i-pad"/></svg><span>Pad</span></button>
-    <button data-go="type"><svg class="i"><use href="#i-type"/></svg><span>Type</span></button>
-    <button data-go="apps"><svg class="i"><use href="#i-apps"/></svg><span>Apps</span></button>
-    <button data-go="media"><svg class="i"><use href="#i-media"/></svg><span>Media</span></button>
-    <button data-more><svg class="i"><use href="#i-more"/></svg><span>More</span></button>
+  <nav id="nav" class="tabbar" aria-label="Sections">
+    <button class="tab" data-go="pad" aria-selected="true"><svg class="size-6"><use href="#touchpad"/></svg>Pad</button>
+    <button class="tab" data-go="type" aria-selected="false"><svg class="size-6"><use href="#keyboard"/></svg>Type</button>
+    <button class="tab" data-go="apps" aria-selected="false"><svg class="size-6"><use href="#layout-grid"/></svg>Apps</button>
+    <button class="tab" data-go="media" aria-selected="false"><svg class="size-6"><use href="#circle-play"/></svg>Media</button>
+    <button class="tab" data-more aria-selected="false"><svg class="size-6"><use href="#ellipsis"/></svg>More</button>
   </nav>
 </div>
 
-<div id="scrim"></div>
-<div id="sheet" role="dialog" aria-modal="true" aria-labelledby="sh-title">
-  <div class="sh-grab" id="sh-grab"></div>
-  <div class="sh-head" id="sh-head">
-    <button class="iconbtn" id="sh-back" aria-label="Back"><svg class="i"><use href="#i-arrow-left"/></svg></button>
-    <h2 id="sh-title">More</h2>
-    <button class="iconbtn" id="sh-close" aria-label="Close"><svg class="i"><use href="#i-x"/></svg></button>
+<dialog id="sheet" class="sheet" aria-labelledby="sh-title">
+  <div class="sh-top">
+    <div class="sheet-grip -mx-4 -mt-3 px-4 pt-3 pb-2"><div class="mx-auto h-1.5 w-10 rounded-full bg-surface2"></div></div>
+    <div class="sh-head">
+      <button class="btn btn-icon btn-gray" id="sh-back" aria-label="Back"><svg class="size-5"><use href="#chevron-left"/></svg></button>
+      <h2 class="sheet-grip py-2" id="sh-title">More</h2>
+      <button class="btn btn-icon btn-gray" id="sh-close" aria-label="Close"><svg class="size-5"><use href="#x"/></svg></button>
+    </div>
   </div>
   <div class="sh-body">
 
     <div class="sh-view on" id="v-more">
-      <div class="tiles">
-        <button class="tile" data-open="browser"><span class="ic"><svg class="i"><use href="#i-browser"/></svg></span><span><b>Browser</b><small>Tabs, zoom, open a link</small></span></button>
-        <button class="tile" data-open="keys"><span class="ic"><svg class="i"><use href="#i-command"/></svg></span><span><b>Special keys</b><small>Fn row, numpad, modifiers</small></span></button>
-        <button class="tile" data-open="clip"><span class="ic"><svg class="i"><use href="#i-clipboard"/></svg></span><span><b>Clipboard</b><small>Text and images</small></span></button>
-        <button class="tile" data-open="power"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Power</b><small>Shut down, restart, lock</small></span></button>
-        <button class="tile" data-open="settings"><span class="ic"><svg class="i"><use href="#i-settings"/></svg></span><span><b>Settings</b><small>Theme, speed, install</small></span></button>
+      <div class="group-list">
+        <button class="row" data-view="browser"><span class="row-tile bg-blue"><svg class="size-4"><use href="#panel-top"/></svg></span><span class="flex-1"><b>Browser</b><small>Tabs, zoom, open a link</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
+        <button class="row" data-view="keys"><span class="row-tile bg-mauve"><svg class="size-4"><use href="#command"/></svg></span><span class="flex-1"><b>Special keys</b><small>Fn row, numpad, modifiers</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
+        <button class="row" data-view="clip"><span class="row-tile bg-teal"><svg class="size-4"><use href="#clipboard-copy"/></svg></span><span class="flex-1"><b>Clipboard</b><small>Text and images</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
+        <button class="row" data-view="power"><span class="row-tile bg-red"><svg class="size-4"><use href="#power"/></svg></span><span class="flex-1"><b>Power</b><small>Shut down, restart, lock</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
+        <button class="row" data-view="settings"><span class="row-tile bg-sky"><svg class="size-4"><use href="#settings"/></svg></span><span class="flex-1"><b>Settings</b><small>Theme, speed, install</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
       </div>
     </div>
 
     <div class="sh-view" id="v-browser">
-      <div class="grid4">
-        <button class="key" data-key="alt+left"><svg class="i"><use href="#i-arrow-left"/></svg>Back</button>
-        <button class="key" data-key="alt+right"><svg class="i"><use href="#i-arrow-right"/></svg>Forward</button>
-        <button class="key" data-key="f5"><svg class="i"><use href="#i-refresh"/></svg>Reload</button>
-        <button class="key" data-key="alt+home"><svg class="i"><use href="#i-home"/></svg>Home</button>
-        <button class="key" data-key="ctrl+t"><svg class="i"><use href="#i-plus"/></svg>New tab</button>
-        <button class="key" data-key="ctrl+w"><svg class="i"><use href="#i-x"/></svg>Close tab</button>
-        <button class="key" data-key="ctrl+shift+t"><svg class="i"><use href="#i-restore"/></svg>Reopen</button>
-        <button class="key" data-key="ctrl+l"><svg class="i"><use href="#i-globe"/></svg>Address</button>
-        <button class="key" data-key="ctrl+="><svg class="i"><use href="#i-plus"/></svg>Zoom in</button>
-        <button class="key" data-key="ctrl+-"><svg class="i"><use href="#i-minus"/></svg>Zoom out</button>
-        <button class="key" data-key="ctrl+0"><svg class="i"><use href="#i-max"/></svg>Reset</button>
-        <button class="key" data-key="ctrl+f"><svg class="i"><use href="#i-search"/></svg>Find</button>
+      <div class="grid grid-cols-4 gap-2">
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="alt+left"><svg class="size-5"><use href="#arrow-left"/></svg>Back</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="alt+right"><svg class="size-5"><use href="#arrow-right"/></svg>Forward</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="f5"><svg class="size-5"><use href="#refresh-cw"/></svg>Reload</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="alt+home"><svg class="size-5"><use href="#house"/></svg>Home</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+t"><svg class="size-5"><use href="#plus"/></svg>New tab</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+w"><svg class="size-5"><use href="#x"/></svg>Close tab</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+shift+t"><svg class="size-5"><use href="#minimize-2"/></svg>Reopen</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+l"><svg class="size-5"><use href="#globe"/></svg>Address</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+="><svg class="size-5"><use href="#plus"/></svg>Zoom in</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+-"><svg class="size-5"><use href="#minus"/></svg>Zoom out</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+0"><svg class="size-5"><use href="#maximize-2"/></svg>Reset</button>
+        <button class="btn btn-gray h-16 flex-col gap-1 !px-1 text-xs" data-key="ctrl+f"><svg class="size-5"><use href="#search"/></svg>Find</button>
       </div>
       <div class="glabel">Open a link on the computer</div>
-      <form class="urlrow" id="urlform">
-        <input class="field" id="urlin" type="url" inputmode="url" placeholder="https://" autocapitalize="off" autocomplete="off" spellcheck="false">
-        <button class="btn" type="submit"><svg class="i sm"><use href="#i-external"/></svg>Open</button>
+      <form class="flex gap-2.5" id="urlform">
+        <input class="field" id="urlin" type="url" inputmode="url" placeholder="https://" aria-label="Link to open" autocapitalize="off" autocomplete="off" spellcheck="false">
+        <button class="btn btn-filled" type="submit"><svg class="size-4"><use href="#external-link"/></svg>Open</button>
       </form>
     </div>
 
@@ -177,13 +177,13 @@
           <div class="kr"><button class="key fn" data-mod="shift">Shift</button><button class="key fn" data-mod="ctrl">Ctrl</button><button class="key fn" data-mod="win">Win</button><button class="key fn" data-mod="alt">Alt</button></div>
           <div class="kr"><button class="key fn" data-key="esc">Esc</button><button class="key fn" data-key="tab">Tab</button><button class="key fn" data-key="insert">Ins</button><button class="key fn" data-key="delete">Del</button></div>
           <div class="kr"><button class="key fn" data-key="home">Home</button><button class="key fn" data-key="end">End</button><button class="key fn" data-key="pageup">PgUp</button><button class="key fn" data-key="pagedown">PgDn</button></div>
-          <div class="kr"><button class="key" data-key="left" data-repeat aria-label="Left"><svg class="i"><use href="#i-arrow-left"/></svg></button><button class="key" data-key="up" data-repeat aria-label="Up"><svg class="i"><use href="#i-arrow-up"/></svg></button><button class="key" data-key="down" data-repeat aria-label="Down"><svg class="i"><use href="#i-arrow-down"/></svg></button><button class="key" data-key="right" data-repeat aria-label="Right"><svg class="i"><use href="#i-arrow-right"/></svg></button></div>
+          <div class="kr"><button class="key" data-key="left" data-repeat aria-label="Left"><svg class="size-5"><use href="#arrow-left"/></svg></button><button class="key" data-key="up" data-repeat aria-label="Up"><svg class="size-5"><use href="#arrow-up"/></svg></button><button class="key" data-key="down" data-repeat aria-label="Down"><svg class="size-5"><use href="#arrow-down"/></svg></button><button class="key" data-key="right" data-repeat aria-label="Right"><svg class="size-5"><use href="#arrow-right"/></svg></button></div>
         </div>
         <div>
           <div class="kr"><button class="key" data-t="7">7</button><button class="key" data-t="8">8</button><button class="key" data-t="9">9</button><button class="key fn" data-t="*">*</button></div>
           <div class="kr"><button class="key" data-t="4">4</button><button class="key" data-t="5">5</button><button class="key" data-t="6">6</button><button class="key fn" data-t="-">-</button></div>
           <div class="kr"><button class="key" data-t="1">1</button><button class="key" data-t="2">2</button><button class="key" data-t="3">3</button><button class="key fn" data-t="+">+</button></div>
-          <div class="kr"><button class="key" data-t="0">0</button><button class="key" data-t=".">.</button><button class="key fn" data-t="/">/</button><button class="key go" data-key="enter" aria-label="Enter"><svg class="i"><use href="#i-enter"/></svg></button></div>
+          <div class="kr"><button class="key" data-t="0">0</button><button class="key" data-t=".">.</button><button class="key fn" data-t="/">/</button><button class="key go" data-key="enter" aria-label="Enter"><svg class="size-5"><use href="#corner-down-left"/></svg></button></div>
         </div>
       </div>
       <div class="glabel">Function keys</div>
@@ -193,96 +193,98 @@
     <div class="sh-view" id="v-clip">
       <div class="glabel">Send to the PC</div>
       <div class="clipcard">
-        <textarea id="cliptext" placeholder="Type or paste text, or add a photo" spellcheck="false"></textarea>
+        <textarea id="cliptext" placeholder="Type or paste text, or add a photo" aria-label="Text to send" spellcheck="false"></textarea>
         <div class="attach" id="attach" hidden>
           <img id="imgprev" alt="Photo to send">
           <span id="attachinfo"></span>
-          <button class="rm" id="imgclear" aria-label="Remove photo"><svg class="i sm"><use href="#i-x"/></svg></button>
+          <button class="btn btn-icon btn-gray btn-sm" id="imgclear" aria-label="Remove photo"><svg class="size-4"><use href="#x"/></svg></button>
         </div>
       </div>
       <div class="btnrow">
-        <label class="btn ghost" for="imgfile"><svg class="i sm"><use href="#i-image"/></svg>Add photo</label>
+        <label class="btn btn-gray" for="imgfile"><svg class="size-4"><use href="#image"/></svg>Add photo</label>
         <input class="vh" type="file" id="imgfile" accept="image/*">
-        <button class="btn" id="clipsend"><svg class="i sm"><use href="#i-phone"/></svg>Send</button>
+        <button class="btn btn-filled" id="clipsend"><svg class="size-4"><use href="#smartphone"/></svg>Send</button>
       </div>
 
       <div class="glabel">Get from the PC</div>
-      <button class="btn ghost" id="clipget" style="width:100%"><svg class="i sm"><use href="#i-monitor"/></svg>Get what the PC copied</button>
-      <div class="clipcard" id="pcres" hidden>
+      <button class="btn btn-gray btn-block" id="clipget"><svg class="size-4"><use href="#monitor"/></svg>Get what the PC copied</button>
+      <div class="clipcard mt-2.5" id="pcres" hidden>
         <div id="pctext"></div>
         <img id="imgpc" alt="Image from the PC" hidden>
       </div>
-      <button class="btn" id="clipcopy" hidden style="width:100%;margin-top:10px"><svg class="i sm"><use href="#i-copy"/></svg>Copy text</button>
+      <button class="btn btn-tinted btn-block mt-2.5" id="clipcopy" hidden><svg class="size-4"><use href="#copy"/></svg>Copy text</button>
 
-      <p class="hint" id="clipmsg"></p>
+      <p class="hint mt-3" id="clipmsg"></p>
     </div>
 
     <div class="sh-view" id="v-power">
-      <div class="tiles">
-        <button class="tile" data-power="shutdown"><span class="ic"><svg class="i"><use href="#i-power"/></svg></span><span><b>Shut down</b><small>Turn the PC off</small></span></button>
-        <button class="tile" data-power="restart"><span class="ic"><svg class="i"><use href="#i-restart"/></svg></span><span><b>Restart</b><small>Reboot now</small></span></button>
-        <button class="tile" data-power="sleep"><span class="ic"><svg class="i"><use href="#i-sleep"/></svg></span><span><b>Sleep</b><small>Low-power standby</small></span></button>
-        <button class="tile" data-power="lock"><span class="ic"><svg class="i"><use href="#i-lock"/></svg></span><span><b>Lock</b><small>Show the lock screen</small></span></button>
-        <button class="tile" data-power="logoff"><span class="ic"><svg class="i"><use href="#i-logoff"/></svg></span><span><b>Sign out</b><small>Close your session</small></span></button>
-        <button class="tile" data-power="hibernate"><span class="ic"><svg class="i"><use href="#i-hibernate"/></svg></span><span><b>Hibernate</b><small>Save state and power off</small></span></button>
+      <div class="group-list">
+        <button class="row" data-power="shutdown"><span class="row-tile bg-red"><svg class="size-4"><use href="#power"/></svg></span><span class="flex-1"><b>Shut down</b><small>Turn the PC off</small></span></button>
+        <button class="row" data-power="restart"><span class="row-tile bg-peach"><svg class="size-4"><use href="#rotate-cw"/></svg></span><span class="flex-1"><b>Restart</b><small>Reboot now</small></span></button>
+        <button class="row" data-power="sleep"><span class="row-tile bg-sapphire"><svg class="size-4"><use href="#moon"/></svg></span><span class="flex-1"><b>Sleep</b><small>Low-power standby</small></span></button>
+        <button class="row" data-power="lock"><span class="row-tile bg-teal"><svg class="size-4"><use href="#lock"/></svg></span><span class="flex-1"><b>Lock</b><small>Show the lock screen</small></span></button>
+        <button class="row" data-power="logoff"><span class="row-tile bg-mauve"><svg class="size-4"><use href="#log-out"/></svg></span><span class="flex-1"><b>Sign out</b><small>Close your session</small></span></button>
+        <button class="row" data-power="hibernate"><span class="row-tile bg-lavender"><svg class="size-4"><use href="#arrow-down-to-line"/></svg></span><span class="flex-1"><b>Hibernate</b><small>Save state and power off</small></span></button>
       </div>
-      <p class="hint" style="margin-top:12px">Power actions ask for a second tap to confirm, except Lock.</p>
+      <p class="hint mt-3">Power actions ask for a second tap to confirm, except Lock.</p>
     </div>
 
     <div class="sh-view" id="v-settings">
       <div class="glabel">Appearance</div>
-      <div class="group">
-        <div class="srow stack"><span>Theme</span>
+      <div class="group-list">
+        <div class="row row-plain srow !items-stretch !py-3">
+          <span>Theme</span>
           <div class="flavors" id="s-flavors">
-            <button class="flv" data-v="auto"><span class="fv auto"></span>Auto</button>
-            <button class="flv latte" data-v="latte"><span class="fv"></span>Latte</button>
-            <button class="flv frappe" data-v="frappe"><span class="fv"></span>Frapp&eacute;</button>
-            <button class="flv macchiato" data-v="macchiato"><span class="fv"></span>Macchiato</button>
-            <button class="flv mocha" data-v="mocha"><span class="fv"></span>Mocha</button>
+            <button class="chip" data-v="auto" aria-pressed="false">Auto</button>
+            <button class="chip" data-v="latte" aria-pressed="false">Latte</button>
+            <button class="chip" data-v="frappe" aria-pressed="false">Frapp&eacute;</button>
+            <button class="chip" data-v="macchiato" aria-pressed="false">Macchiato</button>
+            <button class="chip" data-v="mocha" aria-pressed="false">Mocha</button>
           </div>
         </div>
-        <div class="srow stack"><span>Accent</span>
+        <div class="row row-plain srow !items-stretch !py-3">
+          <span>Accent</span>
           <div class="accents" id="s-accents">
-            <button data-v="blue" aria-label="Blue" style="background:var(--ctp-blue)"><svg class="i"><use href="#i-check"/></svg></button>
-            <button data-v="mauve" aria-label="Mauve" style="background:var(--ctp-mauve)"><svg class="i"><use href="#i-check"/></svg></button>
-            <button data-v="pink" aria-label="Pink" style="background:var(--ctp-pink)"><svg class="i"><use href="#i-check"/></svg></button>
-            <button data-v="peach" aria-label="Peach" style="background:var(--ctp-peach)"><svg class="i"><use href="#i-check"/></svg></button>
-            <button data-v="green" aria-label="Green" style="background:var(--ctp-green)"><svg class="i"><use href="#i-check"/></svg></button>
-            <button data-v="teal" aria-label="Teal" style="background:var(--ctp-teal)"><svg class="i"><use href="#i-check"/></svg></button>
+            <button class="bg-blue" data-v="blue" aria-label="Blue"><svg><use href="#check"/></svg></button>
+            <button class="bg-mauve" data-v="mauve" aria-label="Mauve"><svg><use href="#check"/></svg></button>
+            <button class="bg-pink" data-v="pink" aria-label="Pink"><svg><use href="#check"/></svg></button>
+            <button class="bg-peach" data-v="peach" aria-label="Peach"><svg><use href="#check"/></svg></button>
+            <button class="bg-green" data-v="green" aria-label="Green"><svg><use href="#check"/></svg></button>
+            <button class="bg-teal" data-v="teal" aria-label="Teal"><svg><use href="#check"/></svg></button>
           </div>
         </div>
       </div>
       <div class="glabel">Touchpad</div>
-      <div class="group">
-        <div class="srow stack"><div style="display:flex;justify-content:space-between"><span>Pointer speed</span><span class="val" id="v-speed"></span></div><input type="range" id="s-speed" min="5" max="40" aria-label="Pointer speed"></div>
-        <div class="srow stack"><div style="display:flex;justify-content:space-between"><span>Scroll speed</span><span class="val" id="v-scroll"></span></div><input type="range" id="s-scroll" min="1" max="8" aria-label="Scroll speed"></div>
-        <div class="srow"><span>Natural scrolling</span><button class="tog" id="s-natural" role="switch" aria-label="Natural scrolling"></button></div>
-        <div class="srow"><span>Vibration</span><button class="tog" id="s-haptics" role="switch" aria-label="Vibration"></button></div>
+      <div class="group-list">
+        <div class="row row-plain srow !items-stretch !py-3"><div class="flex justify-between"><span>Pointer speed</span><span class="val" id="v-speed"></span></div><input class="range" type="range" id="s-speed" min="5" max="40" aria-label="Pointer speed"></div>
+        <div class="row row-plain srow !items-stretch !py-3"><div class="flex justify-between"><span>Scroll speed</span><span class="val" id="v-scroll"></span></div><input class="range" type="range" id="s-scroll" min="1" max="8" aria-label="Scroll speed"></div>
+        <label class="row row-plain"><span class="flex-1">Natural scrolling</span><span class="switch switch-accent"><input type="checkbox" id="s-natural"></span></label>
+        <label class="row row-plain"><span class="flex-1">Vibration</span><span class="switch switch-accent"><input type="checkbox" id="s-haptics"></span></label>
       </div>
       <div class="glabel">App</div>
-      <div class="group">
-        <div class="srow stack"><div style="display:flex;justify-content:space-between;align-items:center"><span>Install as app</span><button class="btn" id="installbtn" hidden>Install</button></div><div class="hint" id="installhelp"></div></div>
-        <div class="srow"><span>Gesture help</span><button class="btn ghost" id="showhelp">Show</button></div>
-        <div class="srow stack"><span>Input on UAC prompts</span><div class="hint" id="helperstate"></div></div>
-        <div class="srow" id="pairrow" hidden><span>Pairing</span><button class="btn ghost" id="unpair">Unpair this phone</button></div>
+      <div class="group-list">
+        <div class="row row-plain srow !items-stretch !py-3"><div class="flex items-center justify-between"><span>Install as app</span><button class="btn btn-tinted btn-sm" id="installbtn" hidden>Install</button></div><div class="hint" id="installhelp"></div></div>
+        <div class="row row-plain"><span class="flex-1">Gesture help</span><button class="btn btn-gray btn-sm" id="showhelp">Show</button></div>
+        <div class="row row-plain srow !items-stretch !py-3"><span>Input on UAC prompts</span><div class="hint" id="helperstate"></div></div>
+        <div class="row row-plain" id="pairrow" hidden><span class="flex-1">Pairing</span><button class="btn btn-danger-tinted btn-sm" id="unpair">Unpair this phone</button></div>
       </div>
     </div>
 
   </div>
-</div>
+</dialog>
 
 <div id="pair" hidden>
   <div class="pair-box">
-    <span class="pair-ic"><svg class="i"><use href="#i-lock"/></svg></span>
-    <h2>Pair this phone</h2>
+    <span class="pair-ic"><svg><use href="#lock"/></svg></span>
+    <h2 class="t-title2">Pair this phone</h2>
     <p>On your PC, click the OpenRemote tray icon and choose <b>Pair a phone</b>. Scan the QR code, or type the 6-digit code here.</p>
     <form id="pairform" autocomplete="off">
       <input class="field" id="paircode" inputmode="numeric" pattern="[0-9 ]*" maxlength="7" placeholder="000 000" autocomplete="one-time-code" aria-label="6-digit code">
-      <button class="btn" type="submit">Pair</button>
+      <button class="btn btn-filled" type="submit">Pair</button>
     </form>
     <p class="hint" id="pairmsg"></p>
   </div>
 </div>
 
-<div id="toast" role="status" aria-live="polite"><svg class="i"><use href="#i-info"/></svg><span></span></div>
+<div id="toast" class="toast" role="status" aria-live="polite"><svg class="size-5"><use href="#info"/></svg><span></span></div>
 <textarea id="sysin" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" aria-hidden="true" tabindex="-1"></textarea>

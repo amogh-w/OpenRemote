@@ -21,9 +21,13 @@ USAGE: openremote [OPTIONS]
   --helper-status          is the helper running?
   --pairing / --no-pairing   require phones to pair (the default) or not; saved
   --autostart       start with Windows (this user only); --no-autostart turns it off
+  --smoothing <MS>  pointer smoothing time constant in ms (default 15, 0 = off); higher is smoother but adds delay
   --no-tray         no tray icon; run the server in the foreground
   -v, --verbose     log ignored messages
   -h, --help";
+
+/// Default pointer smoothing time constant: a burst of finger movement is spread over a few of these.
+const DEFAULT_SMOOTHING_MS: u32 = 15;
 
 fn main() {
     shell::attach_console();
@@ -35,6 +39,7 @@ fn main() {
     let mut st = Settings::load_or_create().unwrap_or_else(|e| die(&format!("cannot read settings: {e}")));
     let mut hostname = std::env::var("COMPUTERNAME").unwrap_or_else(|_| "My PC".into());
     let mut verbose = false;
+    let mut smoothing = DEFAULT_SMOOTHING_MS;
     let mut tray = true;
     let mut save = false;
 
@@ -58,6 +63,7 @@ fn main() {
                 }
                 return;
             }
+            "--smoothing" => smoothing = args.next().and_then(|v| v.parse().ok()).unwrap_or_else(|| die("--smoothing needs a number of milliseconds")),
             "--no-tray" => tray = false,
             "-v" | "--verbose" => verbose = true,
             "-h" | "--help" => {
@@ -92,7 +98,7 @@ fn main() {
     println!("Settings file: {}", settings::path().display());
 
     let state = Arc::new(AppState {
-        dispatcher: Dispatcher::new(PlatformInjector::default()),
+        dispatcher: Dispatcher::with_smoothing(PlatformInjector::default(), smoothing),
         hostname,
         verbose,
         pairing: openremote::pairing::Pairing::new(st.require_pairing, Some(settings::devices_path())),

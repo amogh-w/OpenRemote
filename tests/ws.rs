@@ -301,10 +301,10 @@ async fn pwa_assets_are_served() {
     let index = http_get(port, "/").await;
     assert!(index.contains("apple-touch-icon") && index.contains("viewport-fit=cover"));
     // the assembled page: nav, sheet, bundled icons (Lucide attribution), motion preferences
-    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"i-pad\"", "--ctp-mauve", "id=\"clipget\"", "id=\"imgfile\"", "m.t === 'clip.ack'", "gotClip(m)"] {
+    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"touchpad\"", "--ctp-mauve", "id=\"clipget\"", "id=\"imgfile\"", "m.t === 'clip.ack'", "gotClip(m)"] {
         assert!(index.contains(needle), "page is missing {needle}");
     }
-    // a single document: exactly one <style>, one <script> block of app code after the early theme script
+    // a single document: exactly one <style>, then the kit script and the app script after the early theme script
     assert_eq!(index.matches("<style>").count(), 1);
     assert!(!index.contains("{head}") && !index.contains("{css}"), "unreplaced build placeholder");
 }

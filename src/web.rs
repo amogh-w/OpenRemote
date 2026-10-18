@@ -8,6 +8,7 @@ use axum::middleware::{self, Next};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use axum::routing::{get, post};
+use axum::serve::ListenerExt;
 use axum::Json;
 use axum::Router;
 use serde::Deserialize;
@@ -180,6 +181,10 @@ async fn pair_forget<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, 
 }
 
 pub async fn serve<I: Injector + 'static>(listener: TcpListener, state: Arc<AppState<I>>) -> std::io::Result<()> {
+    // Small frames (pongs, replies) must leave at once: Nagle plus a phone's delayed ACK can hold them for ~40 ms.
+    let listener = listener.tap_io(|tcp| {
+        let _ = tcp.set_nodelay(true);
+    });
     axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>()).await
 }
 

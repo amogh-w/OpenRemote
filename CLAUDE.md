@@ -17,7 +17,7 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 cargo test                              # all unit + end-to-end tests (should stay green)
 cargo build --release                   # needs a running openremote.exe to be stopped first
 node --check assets/ui/app.js           # syntax check of the web app script
-python tools/fetch_lucide.py            # regenerate assets/ui/icons.html (network)
+npm run build                           # after UI changes: regenerate assets/ui/app.css + icons.html (Node; commit the output)
 python tools/gen_icons.py               # regenerate PWA + tray icons (Pillow)
 Get-Process openremote | Stop-Process -Force
 Start-Process .\target\release\openremote.exe   # detached; release build has no console window
@@ -34,6 +34,7 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 - `src/command.rs`: `Msg` (serde, tagged by `t`), `Injector` trait (platform backend, default no-op methods),
   `Dispatcher` (validation, clamping, replies), key-name table. Platform-independent and unit-tested.
 - `src/web.rs`: axum routes, WebSocket loop, manifest, `/icon/{file}`, `guard` (Host, Origin, pairing), loopback-only `/admin`.
+- `src/smooth.rs`: pointer smoother. Pointer moves are queued and released in small steps by a pacer thread (exponential drain, time constant `--smoothing`, default 15 ms); clicks and scrolls flush it first so they land where the finger stopped. Platform independent and unit-tested.
 - `src/pairing.rs`: pairing offers, paired phones (hashes), lockout. Platform independent and unit-tested.
 - `src/media.rs`: now-playing info and cover art via the WinRT media session API (`windows` crate; Windows only).
 - `src/uac.rs`: optional SYSTEM input helper (event wire format, `HelperLink` client, helper process, service, install/uninstall). Input events always go through `WinInjector::emit`, which tries the helper first.
@@ -42,7 +43,7 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 - `src/image.rs`: PNG validation and RGBA conversion for clipboard images (limits live here).
 - `src/shell.rs`: tray icon + Win32 message loop (main thread), console attach, error box.
 - `src/main.rs`: CLI, settings, tokio runtime on a worker thread.
-- `build.rs`: assembles `assets/ui/*` into `$OUT_DIR/index.html`; `web.rs` embeds it with `include_str!`.
+- `build.rs`: assembles `assets/ui/*` (and `kit/ui.js`) into `$OUT_DIR/index.html`; `web.rs` embeds it with `include_str!`. It does not run Node.
 - `tests/ws.rs`: spins up the real server on an ephemeral port with a mock injector.
 
 ## Adding a feature (protocol message)
@@ -69,9 +70,11 @@ Start-Process .\target\release\openremote.exe   # detached; release build has no
 ## Frontend conventions (`assets/ui/`)
 
 - One self-contained page: no CDN, no external requests. Edit the parts, not a generated file.
-- Colors are Catppuccin roles (`--ctp-*` from `palette.css`, mapped in `app.css`); see `docs/theme-config.md`.
-  Text on solid accent uses `base`. Do not invent hex values.
-- Icons are Lucide symbols (`<use href="#i-name">`), listed in `tools/fetch_lucide.py`. Add one there and regenerate.
+- The look comes from the cuppa-ui kit (`assets/ui/kit/`: kit.css, palette.css, ui.js, icons). Build markup from kit classes (`btn`, `row`, `chip`, `seg`, `sheet`, ...); `app.src.css` holds only what the kit lacks (touchpad, keyboard, page shell).
+- Edit `body.html`, `app.js`, `app.src.css`, then run `npm run build`; never edit the generated `app.css` or `icons.html`. Class names must appear whole in `body.html` or `app.js` for Tailwind to find them.
+- Colors are Catppuccin roles (`bg-base`, `text-subtext0`, `bg-accent`, `--ctp-*`); no hex values.
+  Text on a solid accent or semantic fill is `text-crust`.
+- Icons are Lucide symbols (`<use href="#name">` with the Lucide name), listed in `assets/ui/kit/icons.txt`. Add one there and run `npm run build`.
 - Motion: animate only `transform` and `opacity`, 120-320 ms, and keep the `prefers-reduced-motion` block working.
 - Storage keys are prefixed `or_`. After UI changes, bump the cache name in `assets/sw.js`.
 - Keep touch targets at least 44 px and respect safe-area insets.

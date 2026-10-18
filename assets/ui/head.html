@@ -1,23 +1,24 @@
 <!doctype html>
-<html lang="en" class="mocha" data-accent="blue">
+<html lang="en" class="mocha">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#1e1e2e">
+<meta name="theme-color" content="#181825">
 <meta name="apple-mobile-web-app-title" content="OpenRemote">
 <link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <title>OpenRemote</title>
 <script>
-// Pick the Catppuccin flavor and accent before first paint (same rules as paintSettings in app.js).
+// Set the Catppuccin flavor and accent before first paint (same rules as paintSettings in app.js).
 (function () {
   try {
     var s = JSON.parse(localStorage.getItem('or_settings') || '{}'), t = s.theme || 'auto';
     var map = { light: 'latte', dark: 'mocha' }; t = map[t] || t;
     var f = ['latte', 'frappe', 'macchiato', 'mocha'].indexOf(t) >= 0 ? t : (matchMedia('(prefers-color-scheme: dark)').matches ? 'mocha' : 'latte');
-    document.documentElement.className = f;
-    var a = { purple: 'mauve', orange: 'peach' }[s.accent] || s.accent;
-    if (a) document.documentElement.dataset.accent = a;
+    var h = document.documentElement;
+    h.className = f;
+    var a = { purple: 'mauve', orange: 'peach' }[s.accent] || s.accent || 'blue';
+    h.style.setProperty('--accent', 'var(--ctp-' + a + ')');
   } catch (e) {}
 })();
 </script>
