@@ -1,4 +1,7 @@
-//! Start with Windows: a per-user entry under `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`.
+//! Start with Windows. Shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and run
+//! `harness.mjs sync --write`, never in a project copy. Each crate defines `APP_NAME` in its `lib.rs`.
+//!
+//! A per-user entry under `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`.
 //! No administrator rights are needed and nothing outside the current user is touched.
 
 #[cfg(windows)]
@@ -19,12 +22,12 @@ mod imp {
     use std::ptr::{null, null_mut};
     use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
-        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE,
-        KEY_SET_VALUE, REG_SZ,
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER,
+        KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ,
     };
 
     const KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-    const NAME: &str = "OpenRemote";
+    const NAME: &str = crate::APP_NAME;
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -49,7 +52,9 @@ mod imp {
     pub fn enabled() -> bool {
         with_key(KEY_QUERY_VALUE, |key| {
             // SAFETY: only asks whether the value exists; no buffers are passed.
-            unsafe { RegQueryValueExW(key, wide(NAME).as_ptr(), null(), null_mut(), null_mut(), null_mut()) == ERROR_SUCCESS }
+            unsafe {
+                RegQueryValueExW(key, wide(NAME).as_ptr(), null(), null_mut(), null_mut(), null_mut()) == ERROR_SUCCESS
+            }
         })
         .unwrap_or(false)
     }
@@ -61,7 +66,7 @@ mod imp {
             // SAFETY: the value buffer is a NUL-terminated UTF-16 string and its byte length is passed exactly.
             let rc = unsafe {
                 if on {
-                    let value = wide(&format!("\"{}\"", exe.display()));
+                    let value = wide(&format!("\"{}\" --startup", exe.display()));
                     RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, value.as_ptr() as *const u8, (value.len() * 2) as u32)
                 } else {
                     RegDeleteValueW(key, name.as_ptr())

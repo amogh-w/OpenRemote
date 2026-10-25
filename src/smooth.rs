@@ -125,7 +125,7 @@ impl Smoother {
             }
         });
         if let Err(e) = started {
-            eprintln!("cannot start the pointer smoother: {e}");
+            crate::applog::error(&format!("cannot start the pointer smoother: {e}"));
         }
     }
 }

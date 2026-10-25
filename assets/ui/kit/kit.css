@@ -40,7 +40,7 @@
 
 @layer base {
   :root {
-    --accent: var(--ctp-mauve);
+    --accent: var(--ctp-lavender);
     --r-scale: 1;
     --r-ctl: calc(12px * var(--r-scale));
     --r-card: calc(20px * var(--r-scale));
@@ -201,7 +201,7 @@
   .badge-sq { border-radius: 6px; }
   .badge-outline { @apply border border-surface2 text-subtext1; }
   .count { @apply grid h-5 min-w-5 place-items-center rounded-full bg-red px-1.5 text-[11px] font-bold text-crust; }
-  .chip { @apply inline-flex h-8 items-center gap-1.5 rounded-full bg-surface0 px-3.5 text-sm font-medium text-text transition active:scale-95 aria-pressed:bg-accent aria-pressed:text-crust; }
+  .chip { @apply inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full whitespace-nowrap bg-surface0 px-3.5 text-sm font-medium text-text transition active:scale-95 aria-pressed:bg-accent aria-pressed:text-crust; }
 
   /* ---- Alerts ---- */
   .tone-info { --tone: var(--ctp-blue); }
@@ -214,9 +214,9 @@
 
   /* ---- Progress / loaders ---- */
   .bar { @apply h-1.5 w-full overflow-hidden rounded-full bg-surface1; }
-  .bar > i { @apply block h-full rounded-full bg-accent transition-[width] duration-500 ease-ios; }
+  .bar > i { @apply block h-full w-full origin-left bg-accent transition-transform duration-500 ease-ios; transform: scaleX(var(--v, 0)); }   /* --v is 0 to 1; scale, never animate width */
   .bar-thick { @apply h-3; }
-  .bar-indet > i { @apply w-2/5; animation: indet 1.3s var(--ease) infinite; }
+  .bar-indet > i { @apply w-2/5; transform: none; transition: none; animation: indet 1.3s var(--ease) infinite; }
   .spin-ring { @apply size-6 animate-spin rounded-full border-[3px] border-surface2 border-t-accent; }
   .spin-ios { @apply relative size-6; animation: spin 1s steps(12) infinite; }
   .spin-ios i { position: absolute; left: 50%; top: 0; width: 2px; height: 7px; margin-left: -1px; border-radius: 2px; background: currentColor; transform-origin: 50% 12px; transform: rotate(calc(var(--n) * 30deg)); opacity: calc(var(--n) / 12); }
@@ -237,6 +237,7 @@
   @starting-style { .modal[open] { transform: var(--modal-from, scale(0.94)); opacity: 0; } }
   .sheet { width: min(100vw, 560px); margin: auto auto 0; border-radius: var(--r-sheet) var(--r-sheet) 0 0; background: var(--ctp-base); box-shadow: var(--shadow-3); transform: translateY(100%); transition: transform 0.45s var(--ease), display 0.45s allow-discrete, overlay 0.45s allow-discrete; }
   .sheet[open] { transform: none; }
+  .sheet-grouped { background: var(--ctp-mantle); }   /* a sheet of grouped lists: mantle ground, base cards on top */
   .sheet { overscroll-behavior: contain; }
   .sheet-grip { touch-action: none; cursor: grab; }
   .sheet-grip:active { cursor: grabbing; }

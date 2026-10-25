@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- The dashboard page. Shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and run
+     harness.mjs sync --write, never in a project copy. The server fills in the double-brace name, version and
+     sprite placeholders below. -->
+<html lang="en" class="mocha">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#181825">
+<title>{{NAME}} dashboard</title>
+<link rel="stylesheet" href="/admin/assets/app.css">
+<script src="/admin/assets/theme.js"></script>
+</head>
+<body class="mx-auto min-h-dvh max-w-[760px] px-4 pt-6 pb-20">
+<div class="absolute size-0 overflow-hidden" aria-hidden="true">{{SPRITE}}</div>
+
+<header class="flex items-center gap-3">
+  <span class="row-tile bg-accent !size-10 !rounded-ctl"><svg class="size-5"><use href="#smartphone"/></svg></span>
+  <div class="min-w-0 flex-1">
+    <h1 class="t-title2">{{NAME}}</h1>
+    <div class="t-foot truncate text-subtext0" id="meta">Version {{VERSION}}</div>
+  </div>
+  <button class="btn btn-gray btn-sm" id="restart"><svg class="size-4"><use href="#rotate-cw"/></svg>Restart</button>
+</header>
+
+<div class="alert alert-bar tone-warn mt-5" id="open-warning" hidden>
+  <svg class="size-5 shrink-0"><use href="#triangle-alert"/></svg>
+  <div><b>Pairing is off</b><div class="t-sub text-subtext1">Anyone on your network can control this PC. Start the app with <code class="kbd">--pairing</code> to require phones to pair.</div></div>
+</div>
+
+<section class="mt-6" id="add">
+  <h2 class="t-foot mb-2 px-1 font-semibold tracking-wider text-subtext0 uppercase">Add a device</h2>
+  <div class="card">
+    <div class="flex gap-2">
+      <input class="field flex-1" id="new-name" maxlength="40" placeholder="Name this device (optional)" aria-label="Device name" autocomplete="off">
+      <button class="btn btn-filled" id="new-code"><svg class="size-4"><use href="#plus"/></svg><span>New code</span></button>
+    </div>
+    <p class="t-sub mt-3 text-subtext0" id="add-hint">Open the address below on the phone, tablet or computer, then type the code. No camera needed. A QR code and a link do the same thing.</p>
+    <p class="t-sub mt-3 text-yellow" id="paused-note" hidden>Pairing is paused. Allow new pairings under Settings to add a device.</p>
+
+    <div id="offer" hidden>
+      <div class="mt-5 flex flex-col items-center gap-1 text-center">
+        <div class="t-foot text-subtext0">Code</div>
+        <div class="t-large tabular-nums" id="code" aria-live="polite"></div>
+        <div class="t-foot text-subtext0" id="countdown"></div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-6">
+        <img class="size-40 rounded-ctl bg-text p-2" id="qr" alt="QR code with the pairing link">
+        <div class="min-w-0 flex-1 basis-60">
+          <div class="t-foot text-subtext0">Address</div>
+          <div class="t-body break-all font-semibold" id="address"></div>
+          <div class="mt-2 flex flex-wrap gap-2" id="addresses" hidden></div>
+          <div class="t-foot mt-3 text-subtext0">Or paste the whole link</div>
+          <div class="mt-1 flex gap-2">
+            <input class="field flex-1 font-mono" id="link" readonly aria-label="Pairing link">
+            <button class="btn btn-gray btn-icon" id="copy-link" aria-label="Copy link"><svg class="size-5"><use href="#copy"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="mt-6">
+  <div class="mb-2 flex items-center px-1">
+    <h2 class="t-foot flex-1 font-semibold tracking-wider text-subtext0 uppercase">Paired devices <span id="count"></span></h2>
+    <button class="btn btn-plain btn-sm" id="remove-all" hidden>Remove all</button>
+  </div>
+  <div class="group-list" id="devices"></div>
+  <div class="card flex flex-col items-center gap-2 py-8 text-center text-subtext0" id="none" hidden>
+    <svg class="size-9 text-overlay1"><use href="#smartphone"/></svg>
+    <div>No devices yet. Add one above.</div>
+  </div>
+</section>
+
+<section class="mt-6">
+  <h2 class="t-foot mb-2 px-1 font-semibold tracking-wider text-subtext0 uppercase">Settings</h2>
+  <div class="group-list">
+    <label class="row row-plain"><span class="flex-1">Allow new pairings<small class="t-foot block text-subtext0">Paired devices keep working when this is off.</small></span><span class="switch switch-accent"><input type="checkbox" id="allow"></span></label>
+    <label class="row row-plain"><span class="flex-1">Start with Windows</span><span class="switch switch-accent"><input type="checkbox" id="autostart"></span></label>
+    <div class="row row-plain"><span class="flex-1">Log and data folder</span><button class="btn btn-gray btn-sm" id="open-log"><svg class="size-4"><use href="#folder-open"/></svg>Open</button></div>
+  </div>
+</section>
+
+<p class="t-foot mt-8 px-1 text-subtext0">This page only opens on this PC. The connection to phones is plain HTTP: pair only on a network you trust.</p>
+
+<script src="/admin/assets/ui.js"></script>
+<script src="/admin/assets/admin.js"></script>
+</body>
+</html>

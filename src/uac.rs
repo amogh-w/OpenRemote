@@ -23,11 +23,23 @@ pub const FRAME: usize = 9;
 /// One input event, as sent from the app to the helper: a tag byte and two little-endian `i32` values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
-    Move { dx: i32, dy: i32 },
+    Move {
+        dx: i32,
+        dy: i32,
+    },
     /// `b`: 0 left, 1 right, 2 middle.
-    Button { b: u8, down: bool },
-    Wheel { horizontal: bool, delta: i32 },
-    Key { vk: u8, down: bool },
+    Button {
+        b: u8,
+        down: bool,
+    },
+    Wheel {
+        horizontal: bool,
+        delta: i32,
+    },
+    Key {
+        vk: u8,
+        down: bool,
+    },
     /// A UTF-16 unit typed as text.
     Unit(u16),
     /// Sent to check that the helper is there; does nothing.
@@ -118,27 +130,31 @@ mod imp {
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
     use windows_sys::Win32::Foundation::{
-        CloseHandle, GetLastError, LocalFree, ERROR_PIPE_CONNECTED, GENERIC_ALL, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
+        CloseHandle, GetLastError, LocalFree, ERROR_PIPE_CONNECTED, GENERIC_ALL, HANDLE, INVALID_HANDLE_VALUE,
+        WAIT_OBJECT_0,
     };
     use windows_sys::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
     };
     use windows_sys::Win32::Security::{
-        DuplicateTokenEx, GetTokenInformation, SecurityImpersonation, TokenPrimary, TokenUser, SECURITY_ATTRIBUTES, TOKEN_DUPLICATE,
-        TOKEN_QUERY, TOKEN_USER,
+        DuplicateTokenEx, GetTokenInformation, SecurityImpersonation, TokenPrimary, TokenUser, SECURITY_ATTRIBUTES,
+        TOKEN_DUPLICATE, TOKEN_QUERY, TOKEN_USER,
     };
     use windows_sys::Win32::Storage::FileSystem::{ReadFile, FILE_FLAG_FIRST_PIPE_INSTANCE, PIPE_ACCESS_INBOUND};
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
     use windows_sys::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
+        PIPE_TYPE_BYTE, PIPE_WAIT,
     };
-    use windows_sys::Win32::System::RemoteDesktop::{ProcessIdToSessionId, WTSGetActiveConsoleSessionId, WTSQueryUserToken};
+    use windows_sys::Win32::System::RemoteDesktop::{
+        ProcessIdToSessionId, WTSGetActiveConsoleSessionId, WTSQueryUserToken,
+    };
     use windows_sys::Win32::System::Services::{
-        RegisterServiceCtrlHandlerW, SetServiceStatus, StartServiceCtrlDispatcherW, SERVICE_ACCEPT_SHUTDOWN, SERVICE_ACCEPT_STOP,
-        SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_RUNNING, SERVICE_START_PENDING, SERVICE_STATUS, SERVICE_STOPPED,
-        SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
+        RegisterServiceCtrlHandlerW, SetServiceStatus, StartServiceCtrlDispatcherW, SERVICE_ACCEPT_SHUTDOWN,
+        SERVICE_ACCEPT_STOP, SERVICE_CONTROL_SHUTDOWN, SERVICE_CONTROL_STOP, SERVICE_RUNNING, SERVICE_START_PENDING,
+        SERVICE_STATUS, SERVICE_STOPPED, SERVICE_STOP_PENDING, SERVICE_TABLE_ENTRYW, SERVICE_WIN32_OWN_PROCESS,
     };
     use windows_sys::Win32::System::StationsAndDesktops::{CloseDesktop, OpenInputDesktop, SetThreadDesktop};
     use windows_sys::Win32::System::Threading::{
@@ -220,10 +236,16 @@ mod imp {
         let mut sd: *mut c_void = null_mut();
         // SAFETY: `sddl` is NUL-terminated; on success `sd` is a LocalAlloc'd descriptor we free below.
         unsafe {
-            if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), SDDL_REVISION_1, &mut sd, null_mut()) == 0 {
+            if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl.as_ptr(), SDDL_REVISION_1, &mut sd, null_mut())
+                == 0
+            {
                 return Err(format!("cannot build the pipe access rule (error {})", GetLastError()));
             }
-            let sa = SECURITY_ATTRIBUTES { nLength: size_of::<SECURITY_ATTRIBUTES>() as u32, lpSecurityDescriptor: sd, bInheritHandle: 0 };
+            let sa = SECURITY_ATTRIBUTES {
+                nLength: size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: sd,
+                bInheritHandle: 0,
+            };
             let pipe = CreateNamedPipeW(
                 wide(PIPE_NAME).as_ptr(),
                 PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
@@ -261,7 +283,8 @@ mod imp {
         let pipe = make_pipe(allow_sid)?;
         loop {
             // SAFETY: `pipe` is a valid server handle for the whole loop.
-            let connected = unsafe { ConnectNamedPipe(pipe, null_mut()) != 0 || GetLastError() == ERROR_PIPE_CONNECTED };
+            let connected =
+                unsafe { ConnectNamedPipe(pipe, null_mut()) != 0 || GetLastError() == ERROR_PIPE_CONNECTED };
             if !connected {
                 std::thread::sleep(Duration::from_millis(200));
                 continue;
@@ -295,7 +318,11 @@ mod imp {
         let s = SERVICE_STATUS {
             dwServiceType: SERVICE_WIN32_OWN_PROCESS,
             dwCurrentState: state,
-            dwControlsAccepted: if state == SERVICE_RUNNING { SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN } else { 0 },
+            dwControlsAccepted: if state == SERVICE_RUNNING {
+                SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN
+            } else {
+                0
+            },
             dwWin32ExitCode: 0,
             dwServiceSpecificExitCode: 0,
             dwCheckPoint: 0,
@@ -395,7 +422,14 @@ mod imp {
                 return None;
             }
             let mut dup: HANDLE = null_mut();
-            let ok = DuplicateTokenEx(token, 0x0200_0000 /* MAXIMUM_ALLOWED */, null(), SecurityImpersonation, TokenPrimary, &mut dup);
+            let ok = DuplicateTokenEx(
+                token,
+                0x0200_0000, /* MAXIMUM_ALLOWED */
+                null(),
+                SecurityImpersonation,
+                TokenPrimary,
+                &mut dup,
+            );
             CloseHandle(token);
             if ok == 0 {
                 None
@@ -418,7 +452,19 @@ mod imp {
             si.cb = size_of::<STARTUPINFOW>() as u32;
             si.lpDesktop = desktop.as_mut_ptr();
             let mut pi: PROCESS_INFORMATION = zeroed();
-            let ok = CreateProcessAsUserW(token, null(), cmd.as_mut_ptr(), null(), null(), 0, CREATE_NO_WINDOW, null(), null(), &si, &mut pi);
+            let ok = CreateProcessAsUserW(
+                token,
+                null(),
+                cmd.as_mut_ptr(),
+                null(),
+                null(),
+                0,
+                CREATE_NO_WINDOW,
+                null(),
+                null(),
+                &si,
+                &mut pi,
+            );
             CloseHandle(token);
             if ok == 0 {
                 return None;
@@ -535,8 +581,23 @@ mod imp {
         let _ = sc(&["delete", SERVICE_NAME]);
         std::thread::sleep(Duration::from_millis(500));
         let bin = format!("\"{}\" --service", dst.display());
-        sc(&["create", SERVICE_NAME, "binPath=", &bin, "start=", "auto", "obj=", "LocalSystem", "DisplayName=", "OpenRemote input helper"])?;
-        let _ = sc(&["description", SERVICE_NAME, "Lets OpenRemote send mouse and keyboard input to UAC prompts, administrator windows and the lock screen."]);
+        sc(&[
+            "create",
+            SERVICE_NAME,
+            "binPath=",
+            &bin,
+            "start=",
+            "auto",
+            "obj=",
+            "LocalSystem",
+            "DisplayName=",
+            "OpenRemote input helper",
+        ])?;
+        let _ = sc(&[
+            "description",
+            SERVICE_NAME,
+            "Lets OpenRemote send mouse and keyboard input to UAC prompts, administrator windows and the lock screen.",
+        ]);
         let _ = sc(&["failure", SERVICE_NAME, "reset=", "60", "actions=", "restart/5000"]);
         sc(&["start", SERVICE_NAME])?;
         Ok(format!("Installed. The helper runs from {} and starts with Windows.", dst.display()))
@@ -619,7 +680,10 @@ To continue, run it again with --yes. To remove it later: openremote --uninstall
                 let flag = if install_cmd { "--install-helper --yes" } else { "--uninstall-helper" };
                 return Some(match rerun_elevated(flag) {
                     Ok(0) => {
-                        println!("{}", if install_cmd { "Done. Check with: openremote --helper-status" } else { "Done." });
+                        println!(
+                            "{}",
+                            if install_cmd { "Done. Check with: openremote --helper-status" } else { "Done." }
+                        );
                         0
                     }
                     Ok(c) => c as i32,

@@ -16,16 +16,18 @@ use std::ptr::{null, null_mut};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use windows_sys::core::GUID;
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HWND, LPARAM, TRUE};
 use windows_sys::Win32::Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 use windows_sys::Win32::Graphics::Gdi::{
     DeleteObject, GetDC, GetDIBits, GetObjectW, ReleaseDC, BITMAP, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS,
 };
-use windows_sys::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+use windows_sys::Win32::System::Com::{
+    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
+};
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
 };
-use windows_sys::core::GUID;
 use windows_sys::Win32::UI::Controls::{ImageList_GetIcon, HIMAGELIST, ILD_NORMAL};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP, VK_F24};
 use windows_sys::Win32::UI::Shell::{
@@ -83,11 +85,7 @@ impl Registry {
             EnumWindows(Some(collect), &mut found as *mut Vec<HWND> as LPARAM);
         }
         let fg = unsafe { GetForegroundWindow() };
-        found
-            .into_iter()
-            .filter_map(|h| self.window_info(h, h == fg))
-            .take(MAX_WINDOWS)
-            .collect()
+        found.into_iter().filter_map(|h| self.window_info(h, h == fg)).take(MAX_WINDOWS).collect()
     }
 
     fn window_info(&self, hwnd: HWND, foreground: bool) -> Option<WindowInfo> {
@@ -113,7 +111,15 @@ impl Registry {
                 ),
                 None => (String::new(), String::new()),
             };
-            Some(WindowInfo { id: hwnd as usize as u64, title, exe, icon, minimized: IsIconic(hwnd) != 0, maximized: IsZoomed(hwnd) != 0, foreground })
+            Some(WindowInfo {
+                id: hwnd as usize as u64,
+                title,
+                exe,
+                icon,
+                minimized: IsIconic(hwnd) != 0,
+                maximized: IsZoomed(hwnd) != 0,
+                foreground,
+            })
         }
     }
 
@@ -297,9 +303,7 @@ fn is_junk_shortcut(name: &str) -> bool {
 
 fn icon_for_path(path: &Path) -> Option<Vec<u8>> {
     let w = wide(path);
-    let is_shortcut = path
-        .extension()
-        .is_some_and(|x| x.eq_ignore_ascii_case("lnk") || x.eq_ignore_ascii_case("url"));
+    let is_shortcut = path.extension().is_some_and(|x| x.eq_ignore_ascii_case("lnk") || x.eq_ignore_ascii_case("url"));
     // SAFETY: `w` is NUL-terminated; any icon handle obtained is destroyed exactly once.
     unsafe {
         let mut hicon: HICON = null_mut();
@@ -315,7 +319,9 @@ fn icon_for_path(path: &Path) -> Option<Vec<u8>> {
         }
         if hicon.is_null() {
             let mut sfi: SHFILEINFOW = zeroed();
-            if SHGetFileInfoW(w.as_ptr(), 0, &mut sfi, size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON) == 0 {
+            if SHGetFileInfoW(w.as_ptr(), 0, &mut sfi, size_of::<SHFILEINFOW>() as u32, SHGFI_ICON | SHGFI_LARGEICON)
+                == 0
+            {
                 return None;
             }
             hicon = sfi.hIcon;
@@ -369,17 +375,17 @@ unsafe fn hicon_to_png(hicon: HICON) -> Option<Vec<u8>> {
             return None;
         }
         let mut color = read_pixels(info.hbmColor, w, h)?;
-        if color.chunks_exact(4).all(|p| p[3] == 0) {
+        if color.as_chunks::<4>().0.iter().all(|p| p[3] == 0) {
             if !info.hbmMask.is_null() {
                 let mask = read_pixels(info.hbmMask, w, h)?;
-                for (c, m) in color.chunks_exact_mut(4).zip(mask.chunks_exact(4)) {
+                for (c, m) in color.as_chunks_mut::<4>().0.iter_mut().zip(mask.as_chunks::<4>().0) {
                     c[3] = if m[0] == 0 { 255 } else { 0 };
                 }
             } else {
-                color.chunks_exact_mut(4).for_each(|c| c[3] = 255);
+                color.as_chunks_mut::<4>().0.iter_mut().for_each(|c| c[3] = 255);
             }
         }
-        color.chunks_exact_mut(4).for_each(|p| p.swap(0, 2)); // BGRA -> RGBA
+        color.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p.swap(0, 2)); // BGRA -> RGBA
         let mut out = Vec::new();
         {
             let mut enc = png::Encoder::new(&mut out, w as u32, h as u32);
@@ -403,7 +409,7 @@ unsafe fn read_pixels(bmp: windows_sys::Win32::Graphics::Gdi::HBITMAP, w: i32, h
         biHeight: -h,
         biPlanes: 1,
         biBitCount: 32,
-        biCompression: BI_RGB as u32,
+        biCompression: BI_RGB,
         ..zeroed()
     };
     let mut buf = vec![0u8; (w * h * 4) as usize];

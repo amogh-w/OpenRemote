@@ -70,7 +70,8 @@ mod tests {
 
     #[test]
     fn old_files_with_a_token_still_load() {
-        let s: Settings = serde_json::from_str(r#"{"token":"0123456789abcdef","port":2000,"require_token":true}"#).unwrap();
+        let s: Settings =
+            serde_json::from_str(r#"{"token":"0123456789abcdef","port":2000,"require_token":true}"#).unwrap();
         assert_eq!(s.port, 2000);
         assert!(s.require_pairing);
         let d: Settings = serde_json::from_str("{}").unwrap();

@@ -1,19 +1,21 @@
-//! HTTP + WebSocket front end: serves the web app, the control socket and the loopback-only admin page.
+//! HTTP + WebSocket front end: serves the web app and the control socket. Pairing routes and the loopback-only
+//! dashboard come from `pairroutes.rs` and `admin.rs` (shared with Kai Remote).
 
 use crate::command::{Dispatcher, Injector, Msg};
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::body::Bytes;
-use axum::extract::{ConnectInfo, DefaultBodyLimit, Form, Path, Request, State};
-use axum::middleware::{self, Next};
+use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Path, Request, State};
 use axum::http::{header, HeaderMap, StatusCode};
-use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::middleware::{self, Next};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::serve::ListenerExt;
 use axum::Json;
 use axum::Router;
-use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 
 const INDEX_HTML: &str = include_str!(concat!(env!("OUT_DIR"), "/index.html"));
@@ -28,80 +30,88 @@ pub struct AppState<I: Injector> {
     pub hostname: String,
     pub verbose: bool,
     pub pairing: crate::pairing::Pairing,
+    /// The port this server listens on (shown on the dashboard and in phone links).
+    pub port: u16,
 }
 
 pub fn router<I: Injector + 'static>(state: Arc<AppState<I>>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/ws", get(ws_handler::<I>))
-        .route("/admin", get(admin::<I>))
-        .route("/admin/revoke", post(admin_revoke::<I>))
-        .route("/pair", post(pair_post::<I>))
-        .route("/pair/status", get(pair_status::<I>))
-        .route("/pair/forget", post(pair_forget::<I>))
         .route("/manifest.webmanifest", get(manifest))
         .route("/icon/{file}", get(app_icon::<I>))
         .route("/media/art", get(media_art::<I>))
         .route("/clip/image.png", get(clip_image_get::<I>))
-        .route(
-            "/clip/image",
-            post(clip_image_post::<I>).layer(DefaultBodyLimit::max(crate::image::MAX_PNG_BYTES)),
-        )
+        .route("/clip/image", post(clip_image_post::<I>).layer(DefaultBodyLimit::max(crate::image::MAX_PNG_BYTES)))
         .route("/sw.js", get(service_worker))
         .route("/icon-180.png", get(|| async { png(ICON_180) }))
         .route("/icon-192.png", get(|| async { png(ICON_192) }))
         .route("/icon-512.png", get(|| async { png(ICON_512) }))
+        .merge(crate::pairroutes::routes::<AppState<I>>())
+        .merge(crate::admin::routes::<AppState<I>>())
         .layer(middleware::from_fn_with_state(state.clone(), guard::<I>))
         .with_state(state)
 }
 
-/// The address the client used must be one a person would type: an IP address, `localhost`, this PC's name
-/// or a `.local` name. That stops DNS rebinding (a web page re-pointing its own name at this PC).
-pub fn host_allowed(host: &str, machine: &str) -> bool {
-    let name = match host.strip_prefix('[') {
-        Some(rest) => rest.split(']').next().unwrap_or(""),
-        None => match host.rsplit_once(':') {
-            Some((n, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => n,
-            _ => host,
-        },
-    };
-    if name.is_empty() {
-        return false;
-    }
-    let lower = name.to_ascii_lowercase();
-    name.parse::<IpAddr>().is_ok()
-        || lower == "localhost"
-        || lower.ends_with(".localhost")
-        || lower.ends_with(".local")
-        || (!machine.is_empty() && lower == machine.to_ascii_lowercase())
-}
-
-/// A request that carries an `Origin` (every browser WebSocket and every cross-site fetch does) must come from
-/// the page this server itself serves: the origin's host and port must equal the `Host` header.
-pub fn origin_matches(origin: &str, host: &str) -> bool {
-    let rest = origin.strip_prefix("http://").or_else(|| origin.strip_prefix("https://"));
-    rest.is_some_and(|authority| authority.eq_ignore_ascii_case(host))
-}
+pub use crate::netguard::{host_allowed, origin_matches};
 
 /// Is the sender allowed to control this PC? The PC itself always is, and so is everybody when pairing is off.
 fn authorized<I: Injector>(st: &AppState<I>, addr: Option<&SocketAddr>, headers: &HeaderMap) -> bool {
     if !st.pairing.required() || (st.pairing.trusts_loopback() && addr.is_some_and(|a| a.ip().is_loopback())) {
         return true;
     }
-    headers
-        .get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(crate::pairing::key_from_cookie)
-        .is_some_and(|k| st.pairing.check(k).is_some())
+    crate::pairroutes::device_id(&st.pairing, headers).is_some()
+}
+
+impl<I: Injector + 'static> crate::pairroutes::PairHost for AppState<I> {
+    fn pairing(&self) -> &crate::pairing::Pairing {
+        &self.pairing
+    }
+    fn is_authorized(&self, addr: Option<&SocketAddr>, headers: &HeaderMap) -> bool {
+        authorized(self, addr, headers)
+    }
+}
+
+impl<I: Injector + 'static> crate::admin::AdminHost for AppState<I> {
+    fn name(&self) -> &str {
+        crate::APP_NAME
+    }
+    fn hostname(&self) -> String {
+        self.hostname.clone()
+    }
+    fn version(&self) -> &str {
+        env!("CARGO_PKG_VERSION")
+    }
+    fn port(&self) -> u16 {
+        self.port
+    }
+    fn log_dir(&self) -> std::path::PathBuf {
+        crate::settings::path().parent().map(|p| p.to_path_buf()).unwrap_or_default()
+    }
+    fn lan_urls(&self) -> Vec<String> {
+        lan_urls(self.port)
+    }
+    fn asset(&self, file: &str) -> Option<&'static str> {
+        Some(match file {
+            "admin.html" => include_str!("../assets/ui/admin.html"),
+            "admin.js" => include_str!("../assets/ui/admin.js"),
+            "app.css" => include_str!("../assets/ui/app.css"),
+            "ui.js" => include_str!("../assets/ui/kit/ui.js"),
+            "theme.js" => include_str!("../assets/ui/kit/theme.js"),
+            "icons" => include_str!("../assets/ui/icons.html"),
+            _ => return None,
+        })
+    }
+    fn restart(&self) {
+        crate::shell::restart()
+    }
 }
 
 /// Pages and routes a phone must be able to reach before it is paired (the page shows the pairing screen).
 fn is_public(path: &str) -> bool {
-    matches!(
-        path,
-        "/" | "/pair" | "/pair/status" | "/pair/forget" | "/manifest.webmanifest" | "/sw.js" | "/icon-180.png" | "/icon-192.png" | "/icon-512.png"
-    ) || path == "/admin"
-        || path == "/admin/revoke" // these two check for loopback themselves
+    matches!(path, "/" | "/manifest.webmanifest" | "/sw.js" | "/icon-180.png" | "/icon-192.png" | "/icon-512.png")
+        || crate::pairroutes::PUBLIC_PATHS.contains(&path)
+        || crate::admin::is_admin_path(path) // the dashboard checks for loopback itself
 }
 
 /// Applied to every route. Without it, any web page open in a browser on the same network could open the
@@ -125,59 +135,6 @@ async fn guard<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, req: R
         }
     }
     next.run(req).await
-}
-
-#[derive(Deserialize)]
-struct PairReq {
-    #[serde(default)]
-    code: String,
-    #[serde(default)]
-    secret: String,
-    #[serde(default)]
-    name: String,
-}
-
-fn key_cookie(key: &str, max_age: u64) -> String {
-    format!("{}={key}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Strict", crate::pairing::COOKIE)
-}
-
-/// A phone proves it has the offer shown on the PC and gets its key as a cookie.
-async fn pair_post<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Json(req): Json<PairReq>) -> Response {
-    use crate::pairing::PairError;
-    let proof = if req.secret.is_empty() { req.code } else { req.secret };
-    match st.pairing.pair(&proof, &req.name) {
-        Ok(key) => (
-            [(header::SET_COOKIE, key_cookie(&key, 10 * 365 * 24 * 3600)), (header::CACHE_CONTROL, "no-store".to_string())],
-            Json(serde_json::json!({"ok": true})),
-        )
-            .into_response(),
-        Err(PairError::Locked(secs)) => (StatusCode::TOO_MANY_REQUESTS, Json(serde_json::json!({"ok": false, "error": "locked", "retry": secs}))).into_response(),
-        Err(PairError::Invalid) => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"ok": false, "error": "invalid"}))).into_response(),
-    }
-}
-
-/// What the page needs to decide between the pairing screen and the app.
-async fn pair_status<I: Injector + 'static>(
-    State(st): State<Arc<AppState<I>>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-) -> Response {
-    let device = headers
-        .get(header::COOKIE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(crate::pairing::key_from_cookie)
-        .is_some_and(|k| st.pairing.check(k).is_some());
-    let paired = authorized(&st, Some(&addr), &headers);
-    ([(header::CACHE_CONTROL, "no-store")], Json(serde_json::json!({"required": st.pairing.required(), "paired": paired, "device": device}))).into_response()
-}
-
-/// A phone removes itself (Settings > Unpair this phone).
-async fn pair_forget<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, headers: HeaderMap) -> Response {
-    let key = headers.get(header::COOKIE).and_then(|v| v.to_str().ok()).and_then(crate::pairing::key_from_cookie);
-    if let Some(id) = key.and_then(|k| st.pairing.check(k)) {
-        st.pairing.revoke(&id);
-    }
-    ([(header::SET_COOKIE, key_cookie("", 0))], Json(serde_json::json!({"ok": true}))).into_response()
 }
 
 pub async fn serve<I: Injector + 'static>(listener: TcpListener, state: Arc<AppState<I>>) -> std::io::Result<()> {
@@ -208,7 +165,9 @@ async fn media_art<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>) ->
 async fn clip_image_get<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>) -> Response {
     let st2 = st.clone();
     match tokio::task::spawn_blocking(move || st2.dispatcher.clip_image_png()).await {
-        Ok(Some(bytes)) => ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "no-store")], bytes).into_response(),
+        Ok(Some(bytes)) => {
+            ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "no-store")], bytes).into_response()
+        }
         _ => StatusCode::NOT_FOUND.into_response(),
     }
 }
@@ -225,7 +184,8 @@ async fn clip_image_post<I: Injector + 'static>(
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.trim().eq_ignore_ascii_case("image/png"));
     if !is_png {
-        return (StatusCode::UNSUPPORTED_MEDIA_TYPE, Json(serde_json::json!({"ok": false, "error": "send image/png"}))).into_response();
+        return (StatusCode::UNSUPPORTED_MEDIA_TYPE, Json(serde_json::json!({"ok": false, "error": "send image/png"})))
+            .into_response();
     }
     let st2 = st.clone();
     match tokio::task::spawn_blocking(move || st2.dispatcher.clip_image_set(&body)).await {
@@ -244,27 +204,32 @@ async fn clip_image_post<I: Injector + 'static>(
 
 /// App/window icon by key (`/icon/<16 hex>.png`). Keys are issued by the server in window and app
 /// lists, so this can only return icons of things the server itself found.
-async fn app_icon<I: Injector + 'static>(
-    State(st): State<Arc<AppState<I>>>,
-    Path(file): Path<String>,
-) -> Response {
+async fn app_icon<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Path(file): Path<String>) -> Response {
     let Some(key) = file.strip_suffix(".png").map(str::to_owned) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let st2 = st.clone();
     // Icon extraction is blocking GDI work; keep it off the async workers.
     match tokio::task::spawn_blocking(move || st2.dispatcher.icon_png(&key)).await {
-        Ok(Some(bytes)) => (
-            [(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "private, max-age=3600")],
-            bytes,
-        )
-            .into_response(),
+        Ok(Some(bytes)) => {
+            ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "private, max-age=3600")], bytes)
+                .into_response()
+        }
         _ => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
 fn png(bytes: &'static [u8]) -> Response {
     ([(header::CONTENT_TYPE, "image/png"), (header::CACHE_CONTROL, "public, max-age=86400")], bytes).into_response()
+}
+
+/// The service worker with its cache name tied to the page it caches, so a UI change retires the old cache by itself.
+fn service_worker_source() -> &'static str {
+    static SRC: OnceLock<String> = OnceLock::new();
+    SRC.get_or_init(|| {
+        let build = format!("{:x}", Sha256::digest(INDEX_HTML.as_bytes()));
+        SW_JS.replace("__BUILD__", &build[..12])
+    })
 }
 
 async fn service_worker() -> Response {
@@ -274,7 +239,7 @@ async fn service_worker() -> Response {
             (header::CACHE_CONTROL, "no-cache"),
             (header::HeaderName::from_static("service-worker-allowed"), "/"),
         ],
-        SW_JS,
+        service_worker_source(),
     )
         .into_response()
 }
@@ -297,14 +262,15 @@ async fn manifest() -> Response {
             {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
         ]
     });
-    (
-        [(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-store")],
-        body.to_string(),
-    )
+    ([(header::CONTENT_TYPE, "application/manifest+json"), (header::CACHE_CONTROL, "no-store")], body.to_string())
         .into_response()
 }
 
-async fn ws_handler<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, headers: HeaderMap, ws: WebSocketUpgrade) -> Response {
+async fn ws_handler<I: Injector + 'static>(
+    State(st): State<Arc<AppState<I>>>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> Response {
     // remembered so the socket can be closed the moment this phone is revoked
     let key = headers
         .get(header::COOKIE)
@@ -324,19 +290,46 @@ async fn reply_for<I: Injector + 'static>(st: &Arc<AppState<I>>, msg: Msg) -> Op
     st.dispatcher.handle(&msg)
 }
 
+/// How often the server pings an idle phone, and how long without any frame (a pong counts) ends the connection.
+const PING_EVERY: Duration = Duration::from_secs(15);
+const IDLE_LIMIT: Duration = Duration::from_secs(45);
+
 async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppState<I>>, key: Option<String>) {
     let helper = st.dispatcher.helper_active();
-    let hello = serde_json::json!({"t": "hello", "host": st.hostname, "v": env!("CARGO_PKG_VERSION"), "helper": helper});
+    let hello =
+        serde_json::json!({"t": "hello", "host": st.hostname, "v": env!("CARGO_PKG_VERSION"), "helper": helper});
     if socket.send(Message::Text(hello.to_string().into())).await.is_err() {
         return;
     }
+    let mut events = st.dispatcher.subscribe();
     let mut recheck = tokio::time::interval(std::time::Duration::from_secs(2));
+    let (mut last_rx, mut last_ping) = (Instant::now(), Instant::now());
     loop {
         let frame = tokio::select! {
             _ = recheck.tick() => {
                 // a revoked phone loses its open connection too, not just new ones
                 if st.pairing.required() && key.as_deref().is_some_and(|k| st.pairing.check(k).is_none()) {
                     break;
+                }
+                // A phone that slept or left the Wi-Fi never says goodbye. Browsers answer protocol pings by
+                // themselves, so silence for IDLE_LIMIT means the link is dead and its slot can be freed.
+                if last_rx.elapsed() > IDLE_LIMIT {
+                    break;
+                }
+                if last_ping.elapsed() >= PING_EVERY {
+                    last_ping = Instant::now();
+                    if socket.send(Message::Ping(Bytes::new())).await.is_err() {
+                        break;
+                    }
+                }
+                continue;
+            }
+            ev = events.recv() => {
+                // A lagging phone just misses some updates; it asks again when it needs the state.
+                if let Ok(text) = ev {
+                    if socket.send(Message::Text(text.into())).await.is_err() {
+                        break;
+                    }
                 }
                 continue;
             }
@@ -345,8 +338,10 @@ async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppSt
                 _ => break,
             },
         };
-        match frame {
-            Message::Text(text) => match serde_json::from_str::<Msg>(&text) {
+        last_rx = Instant::now();
+        // Anything but text (Close included) is skipped: recv() finishes the handshake and then yields None.
+        if let Message::Text(text) = frame {
+            match serde_json::from_str::<Msg>(&text) {
                 Ok(Msg::Ping) => {
                     if socket.send(Message::Text(r#"{"t":"pong"}"#.into())).await.is_err() {
                         break;
@@ -361,11 +356,10 @@ async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppSt
                 }
                 Err(e) => {
                     if st.verbose {
-                        eprintln!("[ws] ignoring bad message {text:?}: {e}");
+                        crate::applog::warn(&format!("ignoring bad ws message {text:?}: {e}"));
                     }
                 }
-            },
-            _ => {} // Close: recv() finishes the handshake and then yields None
+            }
         }
     }
 }
@@ -380,158 +374,4 @@ pub fn lan_urls(port: u16) -> Vec<String> {
             _ => None,
         })
         .collect()
-}
-
-fn qr_svg(url: &str) -> String {
-    qrcode::QrCode::new(url.as_bytes())
-        .map(|c| c.render::<qrcode::render::svg::Color>().min_dimensions(200, 200).build())
-        .unwrap_or_default()
-}
-
-fn esc(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '&' => "&amp;".to_string(),
-            '<' => "&lt;".to_string(),
-            '>' => "&gt;".to_string(),
-            '"' => "&quot;".to_string(),
-            '\'' => "&#39;".to_string(),
-            c => c.to_string(),
-        })
-        .collect()
-}
-
-/// "5 min ago" style text for the device list.
-fn ago(secs: u64) -> String {
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let d = now.saturating_sub(secs);
-    match d {
-        0..=59 => "just now".into(),
-        60..=3599 => format!("{} min ago", d / 60),
-        3600..=86399 => format!("{} h ago", d / 3600),
-        _ => format!("{} days ago", d / 86400),
-    }
-}
-
-/// Loopback only, and only with a loopback `Host` (DNS rebinding).
-fn is_admin_request(addr: &SocketAddr, headers: &HeaderMap) -> bool {
-    let host_ok = headers
-        .get("host")
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|h| h.starts_with("127.0.0.1") || h.starts_with("localhost") || h.starts_with("[::1]"));
-    addr.ip().is_loopback() && host_ok
-}
-
-async fn admin<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, ConnectInfo(addr): ConnectInfo<SocketAddr>, headers: HeaderMap) -> Response {
-    if !is_admin_request(&addr, &headers) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    let port = addr_port(&headers).unwrap_or(0);
-    let urls = lan_urls(port);
-    let mut body = String::new();
-    if st.pairing.required() {
-        let offer = st.pairing.new_offer();
-        body.push_str(&format!(
-            "<h2>Pair a phone</h2><p>On the phone (same Wi-Fi) scan the QR code, or open the address below and type the code. \
-This offer works once and expires in {} minutes; this page refreshes it.</p><div class=code>{} {}</div>",
-            offer.ttl_secs / 60,
-            &offer.code[..3],
-            &offer.code[3..]
-        ));
-        for u in &urls {
-            let link = format!("{u}?pair={}", offer.secret);
-            body.push_str(&format!("<div class=card>{}<p>Or open <b>{}</b> and type the code</p></div>", qr_svg(&link), esc(u)));
-        }
-        if urls.is_empty() {
-            body.push_str("<p>No LAN address found. Connect this PC to a network.</p>");
-        }
-        body.push_str("<h2>Paired phones</h2>");
-        let devices = st.pairing.devices();
-        if devices.is_empty() {
-            body.push_str("<p>None yet.</p>");
-        }
-        for d in devices {
-            body.push_str(&format!(
-                "<form class=dev method=post action=/admin/revoke><span><b>{}</b><br><small>last seen {}</small></span>\
-<input type=hidden name=id value=\"{}\"><button>Revoke</button></form>",
-                esc(&d.name),
-                ago(d.last_seen),
-                esc(&d.id)
-            ));
-        }
-    } else {
-        body.push_str("<h2>Pairing is off</h2><p>Anyone on your network can control this PC. Start with <code>--pairing</code> to require phones to pair.</p>");
-        for u in &urls {
-            body.push_str(&format!("<div class=card><a href=\"{u}\">{u}</a></div>"));
-        }
-    }
-    (
-        [(header::CACHE_CONTROL, "no-store")],
-        Html(format!(
-            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>\
-<meta http-equiv=refresh content=100><title>OpenRemote admin</title>\
-<style>body{{font:16px system-ui;background:#111;color:#eee;max-width:720px;margin:2rem auto;padding:0 1rem}}\
-.card{{background:#1c1c1e;border-radius:12px;padding:1rem;margin:1rem 0;text-align:center}}\
-svg{{background:#fff;padding:8px;border-radius:8px}}a{{color:#6cf;word-break:break-all}}\
-.code{{font:700 2.6rem ui-monospace,Consolas,monospace;letter-spacing:.15em;text-align:center;background:#1c1c1e;border-radius:12px;padding:.8rem;margin:1rem 0}}\
-.dev{{display:flex;justify-content:space-between;align-items:center;background:#1c1c1e;border-radius:12px;padding:.7rem 1rem;margin:.6rem 0}}\
-small{{color:#999}}button{{font:inherit;background:#b3261e;color:#fff;border:0;border-radius:8px;padding:.4rem .9rem}}code{{background:#222;padding:0 .3rem;border-radius:4px}}</style>\
-<h1>OpenRemote</h1><p>Host: <b>{}</b></p>{body}\
-<p style=color:#999>Plain HTTP is not encrypted: pair only on a network you trust.</p>",
-            esc(&st.hostname)
-        )),
-    )
-        .into_response()
-}
-
-#[derive(Deserialize)]
-struct RevokeForm {
-    id: String,
-}
-
-async fn admin_revoke<I: Injector + 'static>(
-    State(st): State<Arc<AppState<I>>>,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    Form(f): Form<RevokeForm>,
-) -> Response {
-    if !is_admin_request(&addr, &headers) {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-    st.pairing.revoke(&f.id);
-    Redirect::to("/admin").into_response()
-}
-
-fn addr_port(headers: &axum::http::HeaderMap) -> Option<u16> {
-    headers.get("host")?.to_str().ok()?.rsplit(':').next()?.parse().ok()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hosts_people_type_are_allowed() {
-        for h in ["192.168.1.20:1990", "127.0.0.1:1990", "[::1]:1990", "localhost:1990", "localhost", "my-pc:1990", "MY-PC:1990", "laptop.local:1990", "10.0.0.5"] {
-            assert!(host_allowed(h, "My-PC"), "{h}");
-        }
-    }
-
-    #[test]
-    fn rebinding_style_hosts_are_refused() {
-        for h in ["", "evil.example:1990", "evil.example", "my-pc.evil.example:1990", ":1990", "attacker.com:80"] {
-            assert!(!host_allowed(h, "My-PC"), "{h}");
-        }
-    }
-
-    #[test]
-    fn origin_must_equal_the_host() {
-        assert!(origin_matches("http://192.168.1.20:1990", "192.168.1.20:1990"));
-        assert!(origin_matches("http://MY-PC:1990", "my-pc:1990"));
-        assert!(!origin_matches("http://evil.example", "192.168.1.20:1990"));
-        assert!(!origin_matches("http://192.168.1.20:8080", "192.168.1.20:1990"));
-        assert!(!origin_matches("null", "192.168.1.20:1990"));
-        assert!(!origin_matches("", "192.168.1.20:1990"));
-        assert!(!origin_matches("chrome-extension://abc", "192.168.1.20:1990"));
-    }
 }

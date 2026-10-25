@@ -36,7 +36,15 @@ impl Injector for Handle {
         c.to_ascii_uppercase() as u8
     }
     fn windows(&self) -> Vec<WindowInfo> {
-        vec![WindowInfo { id: 42, title: "Notes".into(), exe: "notepad.exe".into(), icon: ICON_KEY.into(), minimized: false, maximized: false, foreground: true }]
+        vec![WindowInfo {
+            id: 42,
+            title: "Notes".into(),
+            exe: "notepad.exe".into(),
+            icon: ICON_KEY.into(),
+            minimized: false,
+            maximized: false,
+            foreground: true,
+        }]
     }
     fn window_action(&self, id: u64, a: WindowAct) {
         self.0 .0.lock().unwrap().push(format!("win {id} {a:?}"));
@@ -62,7 +70,15 @@ impl Injector for Handle {
     }
     fn media(&self) -> Option<openremote::command::MediaInfo> {
         use openremote::command::{MediaInfo, MediaState};
-        Some(MediaInfo { state: MediaState::Paused, title: "Song".into(), artist: "Band".into(), app: "Player".into(), pos: 5, dur: 180, art: true })
+        Some(MediaInfo {
+            state: MediaState::Paused,
+            title: "Song".into(),
+            artist: "Band".into(),
+            app: "Player".into(),
+            pos: 5,
+            dur: 180,
+            art: true,
+        })
     }
     fn media_art(&self) -> Option<Vec<u8>> {
         Some(vec![0xFF, 0xD8, 1, 2, 3])
@@ -80,6 +96,7 @@ async fn start() -> (u16, Arc<Rec>) {
         hostname: "TEST-PC".into(),
         verbose: true,
         pairing: openremote::pairing::Pairing::open(),
+        port: 0,
     });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -202,7 +219,7 @@ async fn serves_frontend_and_loopback_admin() {
 
     let admin = http_get(port, "/admin").await;
     assert!(admin.starts_with("HTTP/1.1 200"), "{}", &admin[..60.min(admin.len())]);
-    assert!(admin.contains("TEST-PC") && !admin.contains("<svg"), "no QR code any more");
+    assert!(admin.contains("OpenRemote dashboard"), "the page is the shared dashboard");
 }
 
 async fn raw_request(port: u16, request: &str) -> String {
@@ -242,11 +259,17 @@ async fn other_websites_cannot_open_the_control_socket() {
 async fn rebinding_hosts_and_cross_site_posts_are_refused() {
     let (port, rec) = start().await;
     for path in ["/", "/media/art", "/clip/image.png", "/manifest.webmanifest"] {
-        let r = raw_request(port, &format!("GET {path} HTTP/1.1
+        let r = raw_request(
+            port,
+            &format!(
+                "GET {path} HTTP/1.1
 Host: evil.example
 Connection: close
 
-")).await;
+"
+            ),
+        )
+        .await;
         assert!(r.starts_with("HTTP/1.1 403"), "{path}: {}", &r[..30.min(r.len())]);
     }
     let png = tiny_png(2, 2);
@@ -286,22 +309,45 @@ async fn manifest_makes_the_page_installable() {
     let (port, _) = start().await;
     let m = http_get(port, "/manifest.webmanifest").await;
     assert!(m.starts_with("HTTP/1.1 200") && m.contains("application/manifest+json"));
-    assert!(m.contains(r#""start_url":"/""#) && m.contains(r#""display":"standalone""#) && m.contains("/icon-512.png"), "{m}");
+    assert!(
+        m.contains(r#""start_url":"/""#) && m.contains(r#""display":"standalone""#) && m.contains("/icon-512.png"),
+        "{m}"
+    );
 }
 
 #[tokio::test]
 async fn pwa_assets_are_served() {
     let (port, _) = start().await;
-    for (path, ctype) in [("/icon-180.png", "image/png"), ("/icon-192.png", "image/png"), ("/icon-512.png", "image/png"), ("/sw.js", "application/javascript")] {
+    for (path, ctype) in [
+        ("/icon-180.png", "image/png"),
+        ("/icon-192.png", "image/png"),
+        ("/icon-512.png", "image/png"),
+        ("/sw.js", "application/javascript"),
+    ] {
         let r = http_get(port, path).await;
         assert!(r.starts_with("HTTP/1.1 200"), "{path}: {}", &r[..40.min(r.len())]);
         assert!(r.to_lowercase().contains(&format!("content-type: {ctype}")), "{path} content type");
     }
-    assert!(http_get(port, "/sw.js").await.to_lowercase().contains("service-worker-allowed: /"));
+    let sw = http_get(port, "/sw.js").await;
+    assert!(sw.to_lowercase().contains("service-worker-allowed: /"));
+    assert!(!sw.contains("__BUILD__"), "the cache name is stamped with the page hash");
+    assert!(sw.contains("or-shell-") && http_get(port, "/sw.js").await == sw, "and the stamp is stable");
     let index = http_get(port, "/").await;
     assert!(index.contains("apple-touch-icon") && index.contains("viewport-fit=cover"));
     // the assembled page: nav, sheet, bundled icons (Lucide attribution), motion preferences
-    for needle in ["id=\"nav\"", "id=\"sheet\"", "Lucide", "prefers-reduced-motion", "<symbol id=\"touchpad\"", "--ctp-mauve", "id=\"clipget\"", "id=\"imgfile\"", "m.t === 'clip.ack'", "gotClip(m)"] {
+    for needle in [
+        "id=\"nav\"",
+        "RemoteLink(",
+        "id=\"sheet\"",
+        "Lucide",
+        "prefers-reduced-motion",
+        "<symbol id=\"touchpad\"",
+        "--ctp-mauve",
+        "id=\"clipget\"",
+        "id=\"imgfile\"",
+        "m.t === 'clip.ack'",
+        "gotClip(m)",
+    ] {
         assert!(index.contains(needle), "page is missing {needle}");
     }
     // a single document: exactly one <style>, then the kit script and the app script after the early theme script
@@ -330,13 +376,15 @@ async fn window_switcher_and_launcher_over_websocket() {
     ws.next().await.unwrap().unwrap(); // hello
 
     ws.send(Message::Text(r#"{"t":"win.list"}"#.into())).await.unwrap();
-    let list: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let list: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(list["t"], "win.list");
     assert_eq!(list["items"][0]["title"], "Notes");
     assert_eq!(list["items"][0]["icon"], ICON_KEY);
 
     ws.send(Message::Text(r#"{"t":"app.list"}"#.into())).await.unwrap();
-    let apps: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let apps: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(apps["items"][0]["name"], "Calculator");
 
     ws.send(Message::Text(r#"{"t":"win.act","id":42,"a":"focus"}"#.into())).await.unwrap();
@@ -351,7 +399,12 @@ async fn icon_route_serves_only_issued_keys() {
     let ok = http_get(port, &format!("/icon/{ICON_KEY}.png")).await;
     assert!(ok.starts_with("HTTP/1.1 200") && ok.to_lowercase().contains("content-type: image/png"), "{ok}");
     assert!(ok.contains("PNG-fake"));
-    for path in ["/icon/fedcba9876543210.png", "/icon/..%2f..%2fCargo.toml.png", "/icon/0123456789abcdef", "/icon/0123456789ABCDEF.png"] {
+    for path in [
+        "/icon/fedcba9876543210.png",
+        "/icon/..%2f..%2fCargo.toml.png",
+        "/icon/0123456789abcdef",
+        "/icon/0123456789ABCDEF.png",
+    ] {
         let r = http_get(port, path).await;
         assert!(r.starts_with("HTTP/1.1 404"), "{path}: {}", &r[..30.min(r.len())]);
     }
@@ -401,13 +454,18 @@ async fn now_playing_and_cover_art() {
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
     ws.next().await.unwrap().unwrap(); // hello
     ws.send(Message::Text(r#"{"t":"media.get"}"#.into())).await.unwrap();
-    let m: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let m: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(
         m,
         serde_json::json!({"t": "media", "state": "paused", "title": "Song", "artist": "Band", "app": "Player", "pos": 5, "dur": 180, "art": true})
     );
     let art = http_get(port, "/media/art").await;
-    assert!(art.starts_with("HTTP/1.1 200") && art.to_lowercase().contains("content-type: image/jpeg"), "{}", &art[..60.min(art.len())]);
+    assert!(
+        art.starts_with("HTTP/1.1 200") && art.to_lowercase().contains("content-type: image/jpeg"),
+        "{}",
+        &art[..60.min(art.len())]
+    );
 }
 
 #[tokio::test]
@@ -417,15 +475,18 @@ async fn clipboard_text_roundtrip_reports_success_and_failure() {
     ws.next().await.unwrap().unwrap(); // hello
 
     ws.send(Message::Text(r#"{"t":"clip.set","text":"hello"}"#.into())).await.unwrap();
-    let ack: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let ack: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(ack, serde_json::json!({"t": "clip.ack", "ok": true}));
 
     ws.send(Message::Text(r#"{"t":"clip.set","text":"fail"}"#.into())).await.unwrap();
-    let nack: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let nack: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(nack["ok"], false);
 
     ws.send(Message::Text(r#"{"t":"clip.get"}"#.into())).await.unwrap();
-    let got: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
+    let got: serde_json::Value =
+        serde_json::from_str(ws.next().await.unwrap().unwrap().into_text().unwrap().as_str()).unwrap();
     assert_eq!(got["t"], "clip");
     assert_eq!(got["image"], serde_json::json!({"w": 16, "h": 9}));
     assert_eq!(wait_for(&rec, 2).await, ["clip hello", "clip fail"]);
@@ -440,9 +501,12 @@ async fn start_paired() -> (u16, Arc<AppState<Handle>>, Arc<Rec>) {
         hostname: "TEST-PC".into(),
         verbose: true,
         // the test client connects from loopback, so switch the loopback exemption off to exercise the checks
-        pairing: openremote::pairing::Pairing::new(true, None)
-            .without_loopback_exemption()
-            .with_limits(Duration::from_secs(120), 3, Duration::from_secs(60)),
+        pairing: openremote::pairing::Pairing::new(true, None).without_loopback_exemption().with_limits(
+            Duration::from_secs(120),
+            3,
+            Duration::from_secs(60),
+        ),
+        port: 0,
     });
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -459,7 +523,8 @@ async fn post_json(port: u16, path: &str, body: &str, extra: &str) -> String {
 }
 
 async fn get_with(port: u16, path: &str, extra: &str) -> String {
-    raw_request(port, &format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{extra}Connection: close\r\n\r\n")).await
+    raw_request(port, &format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{extra}Connection: close\r\n\r\n"))
+        .await
 }
 
 /// The `name=value` part of the key cookie in a response.
@@ -482,7 +547,10 @@ async fn ws_refusal(port: u16, cookie: &str) -> Option<String> {
 #[tokio::test]
 async fn unpaired_phones_get_the_page_but_nothing_else() {
     let (port, _, _) = start_paired().await;
-    assert!(get_with(port, "/", "").await.starts_with("HTTP/1.1 200"), "the page must load so it can show the pairing screen");
+    assert!(
+        get_with(port, "/", "").await.starts_with("HTTP/1.1 200"),
+        "the page must load so it can show the pairing screen"
+    );
     assert!(get_with(port, "/manifest.webmanifest", "").await.starts_with("HTTP/1.1 200"));
     let status = get_with(port, "/pair/status", "").await;
     assert!(status.contains(r#""required":true"#) && status.contains(r#""paired":false"#), "{status}");
@@ -506,7 +574,10 @@ async fn pairing_with_the_code_gives_access_and_revoking_takes_it_away() {
     let r = post_json(port, "/pair", &format!(r#"{{"code":"{}","name":"iPhone"}}"#, offer.code), "").await;
     assert!(r.starts_with("HTTP/1.1 200"), "{r}");
     let lower = r.to_lowercase();
-    assert!(lower.contains("httponly") && lower.contains("samesite=strict"), "the key cookie must be HttpOnly and SameSite=Strict: {r}");
+    assert!(
+        lower.contains("httponly") && lower.contains("samesite=strict"),
+        "the key cookie must be HttpOnly and SameSite=Strict: {r}"
+    );
     let cookie = cookie_of(&r);
 
     // the offer worked once only
@@ -530,15 +601,10 @@ async fn pairing_with_the_code_gives_access_and_revoking_takes_it_away() {
     let fake = format!("openremote_key={}", "ab".repeat(32));
     assert!(ws_refusal(port, &fake).await.expect("refused").contains("401"));
 
-    // revoke from the PC's admin page: access is gone at once
+    // remove it from the PC's dashboard: access is gone at once
     let id = state.pairing.devices()[0].id.clone();
-    let body = format!("id={id}");
-    let rev = raw_request(
-        port,
-        &format!("POST /admin/revoke HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()),
-    )
-    .await;
-    assert!(rev.starts_with("HTTP/1.1 303"), "{rev}");
+    let rev = post_json(port, "/admin/api/revoke", &format!(r#"{{"id":"{id}"}}"#), "X-Admin: 1\r\n").await;
+    assert!(rev.starts_with("HTTP/1.1 200"), "{rev}");
     assert!(ws_refusal(port, &cookie).await.expect("refused").contains("401"));
 }
 
@@ -577,22 +643,56 @@ async fn guessing_codes_locks_pairing() {
 async fn other_websites_cannot_pair() {
     let (port, state, _) = start_paired().await;
     let offer = state.pairing.new_offer();
-    let r = post_json(port, "/pair", &format!(r#"{{"code":"{}"}}"#, offer.code), "Origin: http://evil.example\r\n").await;
+    let r =
+        post_json(port, "/pair", &format!(r#"{{"code":"{}"}}"#, offer.code), "Origin: http://evil.example\r\n").await;
     assert!(r.starts_with("HTTP/1.1 403"), "{r}");
     assert!(state.pairing.devices().is_empty());
 }
 
 #[tokio::test]
-async fn admin_shows_the_offer_and_escapes_device_names() {
+async fn the_dashboard_lists_devices_as_data_and_never_injects_names_into_the_page() {
     let (port, state, _) = start_paired().await;
     let offer = state.pairing.new_offer();
-    let r = post_json(port, "/pair", &format!(r#"{{"code":"{}","name":"<script>alert(1)</script>"}}"#, offer.code), "").await;
+    let r = post_json(port, "/pair", &format!(r#"{{"code":"{}","name":"<script>alert(1)</script>"}}"#, offer.code), "")
+        .await;
     assert!(r.starts_with("HTTP/1.1 200"));
-    let admin = http_get(port, "/admin").await;
-    assert!(admin.starts_with("HTTP/1.1 200"));
-    assert!(admin.contains("<svg"), "the QR code is on the page");
-    assert!(admin.contains("Pair a phone") && admin.contains("Paired phones"));
-    assert!(!admin.contains("<script>alert(1)</script>") && admin.contains("&lt;script&gt;"), "device names must be escaped");
+    let st = http_get(port, "/admin/api/state").await;
+    assert!(st.starts_with("HTTP/1.1 200") && st.contains("application/json"), "{st}");
+    assert!(st.contains(r#""name":"<script>alert(1)</script>""#), "names travel as JSON data");
+    let page_script = include_str!("../assets/ui/admin.js");
+    assert!(!page_script.contains("innerHTML"), "the dashboard must render names with textContent");
+}
+
+#[tokio::test]
+async fn the_dashboard_adds_a_named_device_with_a_typed_code() {
+    let (port, state, _) = start_paired().await;
+    let r = post_json(
+        port,
+        "/admin/api/offer",
+        r#"{"name":"Tablet"}"#,
+        "X-Admin: 1
+",
+    )
+    .await;
+    assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    let code = r.split(r#""code":""#).nth(1).and_then(|t| t.get(..6)).expect("a 6-digit code").to_string();
+    let r = post_json(port, "/pair", &format!(r#"{{"code":"{code}","name":"Android phone"}}"#), "").await;
+    assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    assert_eq!(state.pairing.devices()[0].name, "Tablet", "the name typed on the PC wins");
+    // changes without the dashboard's own header are refused
+    let r = post_json(port, "/admin/api/revoke-all", "{}", "").await;
+    assert!(r.starts_with("HTTP/1.1 403"), "{r}");
+    assert_eq!(state.pairing.devices().len(), 1);
+}
+
+#[tokio::test]
+async fn paused_pairing_refuses_new_phones() {
+    let (port, state, _) = start_paired().await;
+    let offer = state.pairing.new_offer();
+    state.pairing.set_paused(true);
+    let r = post_json(port, "/pair", &format!(r#"{{"code":"{}"}}"#, offer.code), "").await;
+    assert!(r.starts_with("HTTP/1.1 403") && r.contains("paused"), "{r}");
+    assert!(state.pairing.devices().is_empty());
 }
 
 #[tokio::test]

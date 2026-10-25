@@ -3,7 +3,8 @@
 
 use crate::command::{MediaInfo, MediaState};
 use windows::Media::Control::{
-    GlobalSystemMediaTransportControlsSessionManager as Manager, GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
+    GlobalSystemMediaTransportControlsSessionManager as Manager,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status,
 };
 use windows::Storage::Streams::DataReader;
 use windows::Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED};

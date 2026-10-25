@@ -43,8 +43,8 @@ pub fn decode_rgba(data: &[u8]) -> Result<(u32, u32, Vec<u8>), &'static str> {
     let px = &buf[..frame.buffer_size()];
     let rgba = match frame.color_type {
         png::ColorType::Rgba => px.to_vec(),
-        png::ColorType::Rgb => px.chunks_exact(3).flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
-        png::ColorType::GrayscaleAlpha => px.chunks_exact(2).flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
+        png::ColorType::Rgb => px.as_chunks::<3>().0.iter().flat_map(|p| [p[0], p[1], p[2], 255]).collect(),
+        png::ColorType::GrayscaleAlpha => px.as_chunks::<2>().0.iter().flat_map(|p| [p[0], p[0], p[0], p[1]]).collect(),
         png::ColorType::Grayscale => px.iter().flat_map(|&g| [g, g, g, 255]).collect(),
         png::ColorType::Indexed => return Err("unsupported PNG"),
     };
@@ -71,7 +71,9 @@ mod tests {
     use super::*;
 
     fn sample(w: u32, h: u32) -> Vec<u8> {
-        (0..w * h).flat_map(|i| [(i % 251) as u8, (i % 13) as u8 * 19, 200, if i % 5 == 0 { 128 } else { 255 }]).collect()
+        (0..w * h)
+            .flat_map(|i| [(i % 251) as u8, (i % 13) as u8 * 19, 200, if i % 5 == 0 { 128 } else { 255 }])
+            .collect()
     }
 
     #[test]

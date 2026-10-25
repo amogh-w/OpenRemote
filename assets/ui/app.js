@@ -5,6 +5,7 @@
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+    raw: { set(k, v) { try { localStorage.setItem(k, v); } catch {} } },   // plain strings, for the kit's ui-* keys
   };
   const NS = 'http://www.w3.org/2000/svg';
   // Icons are Lucide symbols from the inline sprite (see assets/ui/kit/icons.txt); names are Lucide names.
@@ -17,35 +18,49 @@
   const setIcon = (svgEl, name) => svgEl.querySelector('use').setAttribute('href', '#' + name);
 
   // ============================================================ settings
-  const S = Object.assign({ theme: 'auto', accent: 'blue', speed: 15, scroll: 3, natural: true, haptics: true }, store.get('or_settings', {}));
-  S.theme = { light: 'latte', dark: 'mocha' }[S.theme] || S.theme;          // values saved by older versions
-  S.accent = { purple: 'mauve', orange: 'peach' }[S.accent] || S.accent;
-  const FLAVORS = ['latte', 'frappe', 'macchiato', 'mocha'];
-  const flavor = () => (FLAVORS.includes(S.theme) ? S.theme : matchMedia('(prefers-color-scheme: dark)').matches ? 'mocha' : 'latte');
+  // Flavor, accent and corner radius belong to the kit's theme.js (keys ui-flavor, ui-accent, ui-radius). Older
+  // versions kept the first two in or_settings; move them over once, then let theme.js repaint.
+  (function migrateTheme() {
+    const old = store.get('or_settings', {});
+    if (old.theme === undefined && old.accent === undefined) return;
+    const flavor = { light: 'latte', dark: 'mocha' }[old.theme] || old.theme;
+    const accent = { purple: 'mauve', orange: 'peach' }[old.accent] || old.accent;
+    try {
+      if (!localStorage.getItem('ui-flavor') && FLAVORS.includes(flavor)) localStorage.setItem('ui-flavor', flavor);
+      if (!localStorage.getItem('ui-accent') && ACCENTS.includes(accent)) localStorage.setItem('ui-accent', accent);
+    } catch {}
+    delete old.theme; delete old.accent;
+    store.set('or_settings', old);
+    applyTheme();
+  })();
+  const S = Object.assign({ speed: 15, scroll: 3, natural: true, haptics: true }, store.get('or_settings', {}));
   const saveS = () => store.set('or_settings', S);
   const buzz = () => { if (S.haptics && navigator.vibrate) navigator.vibrate(8); };
   const pct = (el) => ((el.value - el.min) / (el.max - el.min)) * 100 + '%';
 
   function paintSettings() {
-    const root = document.documentElement;
-    root.classList.remove(...FLAVORS); root.classList.add(flavor());
-    root.style.setProperty('--accent', 'var(--ctp-' + S.accent + ')');
-    const m = $('meta[name=theme-color]');
-    if (m) m.content = getComputedStyle(root).getPropertyValue('--ctp-mantle').trim() || m.content;
-    $$('#s-flavors .chip').forEach((b) => b.setAttribute('aria-pressed', b.dataset.v === S.theme));
-    $$('#s-accents button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.accent));
     [['#s-speed', '#v-speed', 'speed'], ['#s-scroll', '#v-scroll', 'scroll']].forEach(([i, v, k]) => {
       const el = $(i); el.value = S[k]; el.style.setProperty('--p', pct(el)); $(v).textContent = S[k];
     });
     [['#s-natural', 'natural'], ['#s-haptics', 'haptics']].forEach(([id, k]) => { $(id).checked = !!S[k]; });
   }
-  $('#s-flavors').onclick = (e) => { const b = e.target.closest('.chip'); if (b) { S.theme = b.dataset.v; saveS(); paintSettings(); buzz(); } };
-  $('#s-accents').onclick = (e) => { const b = e.target.closest('button'); if (b) { S.accent = b.dataset.v; saveS(); paintSettings(); buzz(); } };
+  document.addEventListener('click', (e) => {   // the kit's theme hooks: data-flavor, data-accent, data-radius
+    const b = e.target.closest('[data-flavor],[data-accent],[data-radius]');
+    if (!b) return;
+    for (const k of ['flavor', 'accent', 'radius']) if (b.dataset[k]) store.raw.set('ui-' + k, b.dataset[k]);
+    applyTheme(); buzz();
+  });
+  // The browser bar follows the page: copy the mantle color whenever theme.js changes the flavor class.
+  const syncChrome = () => {
+    const m = $('meta[name=theme-color]');
+    if (m) m.content = getComputedStyle(document.documentElement).getPropertyValue('--ctp-mantle').trim() || m.content;
+  };
+  new MutationObserver(syncChrome).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  syncChrome();
   $('#s-speed').oninput = (e) => { S.speed = +e.target.value; saveS(); paintSettings(); };
   $('#s-scroll').oninput = (e) => { S.scroll = +e.target.value; saveS(); paintSettings(); };
   $('#s-natural').onchange = (e) => { S.natural = e.target.checked; saveS(); buzz(); };
   $('#s-haptics').onchange = (e) => { S.haptics = e.target.checked; saveS(); buzz(); };
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'auto') paintSettings(); });
 
   // ============================================================ toast
   let toastT = 0;
@@ -81,7 +96,7 @@
   })();
 
   // ============================================================ connection
-  let ws = null, retry = 0, timer = 0, online = false, everOnline = false, wasLost = false, rtt = null, pingAt = 0, warned = false;
+  let online = false, everOnline = false, wasLost = false, rtt = null, pingAt = 0, warned = false;
   let connState = 'wait';
   function setConn(state) {
     online = state === 'on';
@@ -90,15 +105,13 @@
   }
   const paintName = () => paintStatus();
   function paintStatus() { $('#status').textContent = connState === 'on' ? 'Connected to ' + pc.name : connState === 'wait' ? 'Connecting to ' + pc.name + '...' : 'Offline, retrying'; }
-  function connect() {
-    clearTimeout(timer);
-    if (ws) { ws.onclose = null; ws.onmessage = null; try { ws.close(); } catch {} ws = null; }
-    rtt = null; setConn('wait'); paintName();
-    const sock = new WebSocket(pc.base.replace(/^http/, 'ws') + '/ws');
-    ws = sock;
-    sock.onopen = () => { retry = 0; };
-    sock.onmessage = (e) => {
-      let m; try { m = JSON.parse(e.data); } catch { return; }
+  // The socket itself (reconnect, backoff, silent-link detection) lives in remote-client.js, shared with Kai Remote.
+  const link = RemoteLink({
+    url: () => pc.base.replace(/^http/, 'ws') + '/ws',
+    pingMs: 4000, staleMs: 12000,
+    ping: () => { pingAt = performance.now(); return { t: 'ping' }; },
+    onState: (s) => { if (s === 'connecting') { rtt = null; setConn('wait'); paintName(); } else if (s === 'down') setConn('off'); },
+    onMessage: (m) => {
       if (m.t === 'hello') {
         pc.name = m.host || pc.name; paintName(); setConn('on');
         $('#helperstate').textContent = m.helper
@@ -110,22 +123,20 @@
         askMedia();
       } else if (m.t === 'pong') { rtt = Math.round(performance.now() - pingAt); if (online) setConn('on'); }
       else if (m.t === 'media') gotMedia(m);
+      else if (m.t === 'sleep') gotSleep(m);
       else if (m.t === 'clip') gotClip(m);
       else if (m.t === 'clip.ack') gotAck(m);
       else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; renderWins(); }
       else if (m.t === 'app.list') { appItems = m.items || []; appsLoaded = true; renderApps(); }
-    };
-    sock.onclose = () => {
+    },
+    onClose: ({ retry }) => {
       if (online) { wasLost = true; toast('Connection lost', { bad: true }); }
-      retry++;
-      setConn(retry >= 3 ? 'off' : 'wait');
       if (retry === 3 && !everOnline && !warned) { warned = true; toast("Can't reach the PC. Is it running, on the same Wi-Fi?", { bad: true, ms: 4000 }); }
-      timer = setTimeout(connect, Math.min(3000, 400 * retry));
-      if (retry === 2) pairStatus().then((s) => { if (s && s.required && !s.paired) { clearTimeout(timer); ws = null; showPair('This phone is not paired (any more). Pair it again.'); } });
-    };
-  }
-  const send = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
-  setInterval(() => { if (ws && ws.readyState === 1 && !document.hidden) { pingAt = performance.now(); send({ t: 'ping' }); } }, 4000);
+      if (retry === 2) PairClient.status().then((s) => { if (s && s.required && !s.paired) { link.stop(); PairClient.show('This phone is not paired (any more). Pair it again.'); } });
+    },
+  });
+  const connect = () => link.reconnectNow();
+  const send = (o) => { link.send(o); };
   if (navigator.wakeLock) {
     const wl = () => navigator.wakeLock.request('screen').catch(() => {});
     wl(); document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && wl());
@@ -184,7 +195,7 @@
   let rx = 0, ry = 0, ax = 0, ay = 0, sx = 0, sy = 0, queued = false, lastFlush = 0;
   function flush() {
     queued = false;
-    if (ws && ws.readyState === 1 && ws.bufferedAmount > 256) { queue(); return; }   // link is backed up: keep summing instead of piling up stale moves
+    if (link.isOpen() && link.socket.bufferedAmount > 256) { queue(); return; }   // link is backed up: keep summing instead of piling up stale moves
     const now = performance.now(), idle = now - lastFlush > 100;
     const dt = idle ? 16 : Math.min(50, Math.max(4, now - lastFlush));
     lastFlush = now;
@@ -362,34 +373,13 @@
   })();
 
   // ============================================================ pairing
-  const pairEl = $('#pair');
-  const deviceName = () => (/iPhone/.test(navigator.userAgent) ? 'iPhone' : /iPad/.test(navigator.userAgent) ? 'iPad' : /Android/.test(navigator.userAgent) ? 'Android phone' : 'Browser');
-  async function pairStatus() {
-    try { const r = await fetch('/pair/status', { cache: 'no-store' }); return await r.json(); } catch { return null; }
-  }
+  // The code screen, the ?pair= link and unpairing are PairClient (pair-client.js, shared with Kai Remote).
   function paintPairing(s) { $('#pairrow').hidden = !(s && s.required && s.device); }
-  function showPair(msg) { $('#pairmsg').textContent = msg || ''; pairEl.hidden = false; setTimeout(() => $('#paircode').focus(), 50); }
-  async function doPair(proof) {
-    $('#pairmsg').textContent = 'Pairing...';
-    try {
-      const r = await fetch('/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...proof, name: deviceName() }) });
-      if (r.ok) { pairEl.hidden = true; $('#paircode').value = ''; paintPairing(await pairStatus()); connect(); return true; }
-      $('#pairmsg').textContent = r.status === 429 ? 'Too many wrong tries. Wait a few minutes, then ask the PC for a new code.' : 'That code is wrong or has expired. Check the PC for a fresh one.';
-    } catch { $('#pairmsg').textContent = "Can't reach the PC. Is it running, on the same Wi-Fi?"; }
-    return false;
-  }
-  $('#pairform').onsubmit = (e) => { e.preventDefault(); const c = $('#paircode').value.replace(/\D/g, ''); if (c.length !== 6) { $('#pairmsg').textContent = 'The code has 6 digits.'; return; } doPair({ code: c }); };
-  $('#unpair').onclick = async () => {
-    try { await fetch('/pair/forget', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch {}
-    if (ws) { ws.onclose = null; try { ws.close(); } catch {} ws = null; } clearTimeout(timer);
-    closeSheet(); paintPairing(null); showPair('This phone was unpaired.');
-  };
+  PairClient.onPaired = async () => { paintPairing(await PairClient.status()); connect(); };
+  $('#unpair').onclick = () => { link.stop(); closeSheet(); paintPairing(null); PairClient.unpair(); };
   async function boot() {
-    const qp = new URLSearchParams(location.search).get('pair');
-    if (qp) { history.replaceState(null, '', location.pathname); if (await doPair({ secret: qp })) return; }
-    const s = await pairStatus();
-    paintPairing(s);
-    if (s && s.required && !s.paired) return showPair();
+    if (!(await PairClient.start())) return;
+    paintPairing(await PairClient.status());
     connect();
   }
 
@@ -533,8 +523,8 @@
   // While the Media page is open, ask the PC what is playing every 2 s; the progress bar advances locally in between.
   let np = null, npAt = 0, npKey = '', npPoll = 0, npTick = 0;
   const fmtT = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-  function askMedia() { if (online && page === 'media') send({ t: 'media.get' }); }
-  function startMedia() { stopMedia(); askMedia(); paintMedia(); npPoll = setInterval(askMedia, 2000); npTick = setInterval(paintMedia, 500); }
+  function askMedia() { if (online && page === 'media') { send({ t: 'media.get' }); send({ t: 'sleep.get' }); } }
+  function startMedia() { stopMedia(); askMedia(); paintMedia(); paintSleep(); npPoll = setInterval(askMedia, 2000); npTick = setInterval(() => { paintMedia(); paintSleep(); }, sl ? 250 : 500); }
   function stopMedia() { clearInterval(npPoll); clearInterval(npTick); }
   function gotMedia(m) { np = m.state === 'none' ? null : m; npAt = performance.now(); paintMedia(); }
   const npImg = $('#np-img');
@@ -558,9 +548,37 @@
     if (show) {
       const pos = Math.min(np.dur, np.pos + (playing ? (performance.now() - npAt) / 1000 : 0));
       $('#np-pos').textContent = fmtT(pos); $('#np-dur').textContent = fmtT(np.dur);
-      $('#np-fill').style.width = (pos / np.dur * 100).toFixed(2) + '%';
+      $('#np-fill').style.setProperty('--v', (pos / np.dur).toFixed(4));
     }
   }
+
+  // ---- sleep timer: the PC owns the countdown (it keeps running if the phone drops); the phone paints it between answers
+  let sl = null;   // { end (performance.now() ms), total (s), episode } while a timer runs
+  const fmtLeft = (s) => (s >= 3600 ? Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') : fmtT(s));
+  function gotSleep(m) {
+    if (m.err) toast(m.err === 'no-episode' ? 'Nothing with a known length is playing' : 'Pick a time', { bad: true });
+    const was = !!sl;
+    sl = m.on ? { end: performance.now() + m.left * 1000, total: Math.max(1, m.total), episode: !!m.episode } : null;
+    if (was !== !!sl && page === 'media') startMedia();   // repaint at the pace the new state needs
+    paintSleep();
+  }
+  function paintSleep() {
+    $('#sl-pick').hidden = !!sl; $('#sl-run').hidden = !sl;
+    if (!sl) return;
+    const left = Math.max(0, (sl.end - performance.now()) / 1000);
+    $('#sl-left').textContent = fmtLeft(Math.ceil(left));
+    $('#sl-what').textContent = left <= 0 ? 'Going to sleep...' : sl.episode ? 'Sleeps when the episode ends' : 'Then the PC goes to sleep';
+    $('#sl-fill').style.setProperty('--v', Math.min(1, left / sl.total).toFixed(4));
+  }
+  $$('[data-sleep]').forEach((b) => {
+    b.onclick = () => {
+      if (!online) { toast('Not connected', { bad: true }); return; }
+      const v = b.dataset.sleep;
+      send(v === 'episode' ? { t: 'sleep.set', episode: true } : { t: 'sleep.set', secs: +v });
+      buzz();
+    };
+  });
+  $('#sl-cancel').onclick = () => { send({ t: 'sleep.cancel' }); buzz(); };
 
   // ============================================================ browser / clipboard / power
   $('#urlform').onsubmit = (e) => {
@@ -724,6 +742,7 @@
   $('#nav [data-more]').onclick = () => { sheetOpen ? closeSheet() : openSheet('more'); buzz(); };
 
   // ============================================================ start
+  applyTheme();   // theme.js ran in the head, before the settings buttons existed: mark the chosen flavor, accent and radius
   paintSettings(); paintMods();
   go(page);
   boot();

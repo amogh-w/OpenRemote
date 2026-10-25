@@ -73,3 +73,7 @@ moon
 lock
 log-out
 arrow-down-to-line
+pencil
+trash-2
+folder-open
+triangle-alert

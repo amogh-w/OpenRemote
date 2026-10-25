@@ -87,9 +87,7 @@ mod win {
     fn keybd(vk: u16, scan: u16, flags: u32) -> INPUT {
         INPUT {
             r#type: INPUT_KEYBOARD,
-            Anonymous: INPUT_0 {
-                ki: KEYBDINPUT { wVk: vk, wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 },
-            },
+            Anonymous: INPUT_0 { ki: KEYBDINPUT { wVk: vk, wScan: scan, dwFlags: flags, time: 0, dwExtraInfo: 0 } },
         }
     }
 
@@ -104,13 +102,12 @@ mod win {
     /// managers and remote tools do this for a few milliseconds). Any other error gives up at once.
     fn clipboard<T>(op: impl Fn(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Option<T> {
         for _ in 0..8 {
-            match arboard::Clipboard::new() {
-                Ok(mut c) => match op(&mut c) {
+            if let Ok(mut c) = arboard::Clipboard::new() {
+                match op(&mut c) {
                     Ok(v) => return Some(v),
                     Err(arboard::Error::ClipboardOccupied) => {}
                     Err(_) => return None,
-                },
-                Err(_) => {}
+                }
             }
             std::thread::sleep(std::time::Duration::from_millis(40));
         }
@@ -193,7 +190,11 @@ mod win {
         fn clip_image_set(&self, png: &[u8]) -> bool {
             let Ok((w, h, rgba)) = crate::image::decode_rgba(png) else { return false };
             clipboard(|c| {
-                c.set_image(arboard::ImageData { width: w as usize, height: h as usize, bytes: std::borrow::Cow::Borrowed(&rgba) })
+                c.set_image(arboard::ImageData {
+                    width: w as usize,
+                    height: h as usize,
+                    bytes: std::borrow::Cow::Borrowed(&rgba),
+                })
             })
             .is_some()
         }

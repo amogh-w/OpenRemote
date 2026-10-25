@@ -25,6 +25,7 @@ frontend on the phone, a small JSON protocol in between.
 | 16 | Launch on startup (**done**) | `HKCU\...\Run` value (no admin rights needed), toggled from the tray menu or with `--autostart` / `--no-autostart`. |
 | 17 | Works on UAC prompts and the lock screen (**done, opt-in**) | The same exe has three extra modes: `--service` (LocalSystem service that keeps one helper alive in the active console session), `--input-helper` (SYSTEM token copied from that session's winlogon, attaches to the input desktop, injects events read from a named pipe) and `--install-helper` / `--uninstall-helper`. The pipe is limited to SYSTEM and the signed-in user and refuses remote clients. The app sends input to the helper when connected and injects locally otherwise. Installed copy lives in Program Files so a normal program cannot replace the service binary. Off by default; see the README for the risks (a paired phone can click through a UAC prompt). |
 | 18 | Keep the cursor visible with no mouse attached | A few lines of `SystemParametersInfo` (MouseKeys). |
+| 19 | Sleep timer on the Media page (**done**) | The PC keeps the countdown and sleeps itself, so it works if the phone drops. See "Sleep timer" below. |
 
 Out of scope for now: Bluetooth transport, auto-update, screen mirroring, file transfer, telemetry.
 
@@ -50,6 +51,35 @@ reachable only from loopback.
 JSON text frames, see the table in `README.md`. Pointer latency over a LAN WebSocket with
 `TCP_NODELAY` is plenty, so there is no UDP path. The frontend coalesces `move` events to one per
 animation frame.
+
+### Sleep timer
+
+Lives in `Dispatcher` (`src/command.rs`), so it is platform independent and unit-tested with the mock injector. The
+phone only starts, cancels and displays it; it never decides when the PC sleeps.
+
+Messages (see `README.md` for the wire format): `sleep.set` (`secs`, or `episode: true`), `sleep.cancel`, `sleep.get`.
+All three answer with `{"t":"sleep", "on", "left", "total", "episode"}` (or `"on": false`, plus `"err"` when refused).
+
+State: one `SleepState` behind a mutex, holding a generation counter and the current timer (`started`, `deadline`, and
+the playing title for an episode timer). There is at most one timer.
+
+- **Start:** `secs` is clamped to 12 hours and `0` is refused (`bad-time`). With `episode` the server reads the media
+  session: it needs a known length and a state other than stopped (else `no-episode`), and the deadline is
+  `now + (dur - pos) + 2 s` (a grace period for credits and the player to settle). Starting bumps the generation,
+  stores the timer and spawns a watcher thread that carries that generation.
+- **Replace and cancel:** both just bump the generation (cancel also clears the timer). A watcher whose generation is no
+  longer current exits without doing anything, so an old timer can never fire.
+- **Watcher:** wakes every 200 ms. While the deadline is in the future it keeps waiting. When due, a plain timer takes
+  itself out of the state and calls `Injector::power(Sleep)`. An episode timer first asks the media session again: if
+  the same title still has more than 3 s left (it was paused, or the player was seeked back), the deadline moves to
+  `now + left + 2 s` and it keeps waiting; otherwise it sleeps. The media call runs without the lock held.
+- **Progress:** `left` and `total` are measured on the PC (`total` is `deadline - started`, so a moved episode deadline
+  grows `total`, so the bar refills a little instead of reading wrong). The phone converts `left` to a local end
+  time, repaints every 250 ms, and re-syncs from a `sleep.get` sent with each 2 s media poll. A cancel from another
+  phone shows up at the next poll.
+- **The sleep itself:** the existing `PowerAct::Sleep` (`rundll32 powrprof.dll,SetSuspendState 0,1,0`). Windows may
+  hibernate instead when hibernation is enabled.
+- **Not persisted:** a timer does not survive a restart of the server (and a PC that went to sleep has used it up).
 
 ### Security model
 

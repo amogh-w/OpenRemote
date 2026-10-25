@@ -1,0 +1,296 @@
+{
+ "_about": "Phone to PC messages. valid: must parse as a Msg. invalid: must be rejected at parse time. unsafe_urls/safe_urls: what `open` may launch (Dispatcher drops unsafe ones).",
+ "valid": [
+  {
+   "t": "move",
+   "dx": 5,
+   "dy": -3
+  },
+  {
+   "t": "btn",
+   "b": "left",
+   "s": "click"
+  },
+  {
+   "t": "btn",
+   "b": "right",
+   "s": "down"
+  },
+  {
+   "t": "btn",
+   "b": "middle",
+   "s": "up"
+  },
+  {
+   "t": "btn",
+   "b": "left",
+   "s": "dbl"
+  },
+  {
+   "t": "scroll",
+   "dy": 120
+  },
+  {
+   "t": "scroll",
+   "dx": -120,
+   "dy": 0
+  },
+  {
+   "t": "scroll"
+  },
+  {
+   "t": "key",
+   "k": "enter"
+  },
+  {
+   "t": "key",
+   "k": "ctrl+shift+t"
+  },
+  {
+   "t": "key",
+   "k": "a",
+   "s": "down"
+  },
+  {
+   "t": "key",
+   "k": "a",
+   "s": "up"
+  },
+  {
+   "t": "key",
+   "k": "ctrl++"
+  },
+  {
+   "t": "text",
+   "v": "hello"
+  },
+  {
+   "t": "power",
+   "a": "lock"
+  },
+  {
+   "t": "power",
+   "a": "sleep"
+  },
+  {
+   "t": "power",
+   "a": "hibernate"
+  },
+  {
+   "t": "power",
+   "a": "logoff"
+  },
+  {
+   "t": "power",
+   "a": "restart"
+  },
+  {
+   "t": "power",
+   "a": "shutdown"
+  },
+  {
+   "t": "open",
+   "url": "https://example.com/"
+  },
+  {
+   "t": "clip.set",
+   "text": "copied"
+  },
+  {
+   "t": "clip.get"
+  },
+  {
+   "t": "win.list"
+  },
+  {
+   "t": "win.act",
+   "id": 12345,
+   "a": "focus"
+  },
+  {
+   "t": "win.act",
+   "id": 1,
+   "a": "min"
+  },
+  {
+   "t": "win.act",
+   "id": 1,
+   "a": "max"
+  },
+  {
+   "t": "win.act",
+   "id": 1,
+   "a": "restore"
+  },
+  {
+   "t": "win.act",
+   "id": 1,
+   "a": "close"
+  },
+  {
+   "t": "app.list"
+  },
+  {
+   "t": "app.launch",
+   "id": "0123456789abcdef"
+  },
+  {
+   "t": "media.get"
+  },
+  {
+   "t": "sleep.set",
+   "secs": 600
+  },
+  {
+   "t": "sleep.set",
+   "episode": true
+  },
+  {
+   "t": "sleep.cancel"
+  },
+  {
+   "t": "sleep.get"
+  },
+  {
+   "t": "ping"
+  }
+ ],
+ "invalid": [
+  {
+   "t": "exec",
+   "cmd": "calc.exe"
+  },
+  {
+   "t": "shell",
+   "c": "dir"
+  },
+  {
+   "dx": 1,
+   "dy": 1
+  },
+  {
+   "t": "move"
+  },
+  {
+   "t": "move",
+   "dx": "1",
+   "dy": 2
+  },
+  {
+   "t": "move",
+   "dx": 1.5,
+   "dy": 2
+  },
+  {
+   "t": "btn",
+   "b": "back",
+   "s": "click"
+  },
+  {
+   "t": "btn",
+   "b": "left",
+   "s": "hold"
+  },
+  {
+   "t": "btn",
+   "b": "left"
+  },
+  {
+   "t": "key"
+  },
+  {
+   "t": "key",
+   "k": 5
+  },
+  {
+   "t": "key",
+   "k": "a",
+   "s": "toggle"
+  },
+  {
+   "t": "text"
+  },
+  {
+   "t": "text",
+   "v": 5
+  },
+  {
+   "t": "power",
+   "a": "format"
+  },
+  {
+   "t": "power"
+  },
+  {
+   "t": "power",
+   "a": "Lock"
+  },
+  {
+   "t": "open"
+  },
+  {
+   "t": "clip.set"
+  },
+  {
+   "t": "win.act",
+   "id": "12",
+   "a": "focus"
+  },
+  {
+   "t": "win.act",
+   "id": 1,
+   "a": "kill"
+  },
+  {
+   "t": "win.act",
+   "a": "focus"
+  },
+  {
+   "t": "app.launch"
+  },
+  {
+   "t": "app.launch",
+   "id": 5
+  },
+  {
+   "t": "sleep.set",
+   "secs": "600"
+  },
+  {
+   "t": "sleep.set",
+   "secs": -5
+  },
+  {
+   "t": "sleep.set",
+   "secs": 1.5
+  },
+  {
+   "t": "sleep.set",
+   "episode": "yes"
+  },
+  {
+   "t": "Ping"
+  },
+  {
+   "t": "MOVE",
+   "dx": 1,
+   "dy": 1
+  }
+ ],
+ "unsafe_urls": [
+  "file:///c:/windows/system32/calc.exe",
+  "javascript:alert(1)",
+  "ftp://example.com/",
+  "calc.exe",
+  "https://exa mple.com/",
+  "https://example.com/\nx",
+  "data:text/html,<script>1</script>",
+  "",
+  "//example.com/"
+ ],
+ "safe_urls": [
+  "http://example.com",
+  "https://example.com/a?b=c#d",
+  "http://192.168.1.2:8080/x"
+ ]
+}

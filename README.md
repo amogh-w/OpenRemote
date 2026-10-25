@@ -11,7 +11,7 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **Touchpad** with tap to click, two-finger tap to right-click, two-finger scroll, tap-then-hold to drag, a scroll strip, and labeled Left / Mid / Right buttons that you can hold.
 - **Keyboard**: on-screen QWERTY with number row, symbols, shift and caps, key pop-ups and hold-to-repeat; sticky Ctrl/Alt/Shift/Win for shortcuts; or your phone's own keyboard (emoji, other languages, swipe typing).
 - **Special keys**: Fn row, numpad, navigation block, arrows.
-- **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen.
+- **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen. A **sleep timer** (see below) puts the PC to sleep after a set time or when the episode ends.
 
 **Windows**
 - **App switcher**: live list of open windows with real icons; focus, minimize, maximize, restore or close each one. The active window is highlighted.
@@ -22,13 +22,13 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 
 **App and desktop**
 - **Input on UAC prompts, administrator windows and the lock screen**, with an optional SYSTEM helper service you install on purpose (off by default, see Security).
-- **Tray icon** with Pair a phone, a Start with Windows toggle and Quit; the release build has no console window.
+- **Tray icon and dashboard** (see below); the release build has no console window.
 - **Installable web app (PWA)** with a manifest, icons and an offline shell.
 - **Catppuccin theming**: Latte, Frappe, Macchiato, Mocha or Auto, with six accent colors.
 - **Polished motion**: short, subtle animations, switched off by the phone's "reduce motion" setting.
 - **One PC per page**: the page connects straight back to the PC that served it. Saving and switching between several PCs is planned (see the roadmap).
 - **Landscape layout** with a side navigation rail.
-- **Pairing**: a phone must pair once (QR code or 6-digit code shown on the PC) before it can control anything. Pairing is on by default, each phone has its own key, and any phone can be revoked from the PC.
+- **Pairing**: a phone must pair once (type the 6-digit code shown on the PC, scan its QR, or open its link) before it can control anything. Pairing is on by default, each phone has its own key, and any phone can be revoked from the PC.
 
 ## Screenshots
 
@@ -63,8 +63,8 @@ Requirements: Windows 10/11 and a [Rust](https://rustup.rs) toolchain.
 cargo run --release
 ```
 
-1. A tray icon appears. On the PC, open `http://127.0.0.1:1990/admin` (tray: *Pair a phone*) to see the pairing QR code and 6-digit code.
-2. On the phone, on the same Wi-Fi, scan the QR code on the admin page, or open `http://<pc-ip>:1990/` and type the 6-digit code. This is needed once per phone (and again inside the Home Screen app, which keeps its own storage).
+1. A tray icon appears. Open the dashboard from it (or `http://127.0.0.1:1990/admin` on the PC) and choose *Add a device*: it shows a 6-digit code, a QR and a link. The dashboard also lists paired devices, renames and removes them, and can pause pairing.
+2. On the phone, on the same Wi-Fi, open `http://<pc-ip>:1990/` and type the code (no camera needed), or scan the QR code, or open the link. This is needed once per phone; after that the phone stays paired until you remove it.
 3. Allow the program through Windows Firewall (Private networks) if prompted.
 4. Optional: *Add to Home Screen* for a full-screen app (see below).
 
@@ -89,6 +89,18 @@ Settings live in `%APPDATA%\openremote\settings.json`.
 
 - **iPhone / iPad**: Safari, Share, *Add to Home Screen*. Works over plain HTTP.
 - **Android**: Chrome only does a full install over HTTPS or localhost; over plain HTTP you get a shortcut. For the full install, open `chrome://flags`, enable *Insecure origins treated as secure*, add `http://<pc-ip>:1990`, relaunch Chrome, then *Install app*.
+
+## Tray and dashboard
+
+The tray icon (near the clock) opens the dashboard and has Pair a phone, Copy phone link, Pause pairing, Start with Windows, Open log folder, Restart and Exit. The dashboard is at `http://127.0.0.1:1990/admin` and opens only on the PC itself. It lists paired devices, adds a device (with an optional name), renames and removes devices, and pauses pairing. Only one copy runs per port: starting it again opens the dashboard of the running one. Start with Windows launches it quietly (no dashboard). Closing the console or launcher window does not stop it; use Exit in the tray.
+
+## Pairing
+
+A phone pairs once, then stays paired until it is removed. The dashboard shows one offer with three ways in: a 6-digit code to type (no camera needed), a QR code, and a link. An offer lasts 5 minutes and works once. Five wrong codes in a row pause pairing for 5 minutes. Each phone gets its own key; only a hash of it is kept on the PC. Pause pairing stops new phones without disconnecting the paired ones.
+
+## Sleep timer
+
+Choose 10 sec (a test), 15, 30 or 45 min, 1 or 2 hours, or the end of the episode. The PC keeps the countdown, so it still sleeps if the phone disconnects, and every connected phone shows the same timer. An end-of-episode timer waits while the episode is still playing (paused, for example). It can be cancelled at any time.
 
 ## Architecture
 
@@ -154,6 +166,9 @@ JSON text frames on `GET /ws`.
 {"t":"clip.set","text":"..."}               replace PC clipboard text (max 256 KB) -> {"t":"clip.ack","ok":true|false}
 {"t":"clip.get"}                            -> {"t":"clip","text":"...","image":{"w":..,"h":..}|null}
 {"t":"media.get"}                           -> {"t":"media","state":"playing|paused|stopped|none","title":"..","artist":"..","app":"..","pos":s,"dur":s,"art":bool}
+{"t":"sleep.set","secs":s}                    -> {"t":"sleep","on":true,"left":s,"total":s,"episode":bool}  (or {"on":false,"err":"bad-time"}); secs is capped at 12 h
+{"t":"sleep.set","episode":true}                -> same; ends when the playing item ends ({"on":false,"err":"no-episode"} if its length is unknown)
+{"t":"sleep.cancel"} / {"t":"sleep.get"}        -> {"t":"sleep","on":false} / the current timer
 {"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,maximized,foreground}]}
 {"t":"win.act","id":123,"a":"focus|min|max|restore|close"}
 {"t":"app.list"}                            -> {"t":"app.list","items":[{id,name,icon}]}
@@ -161,7 +176,7 @@ JSON text frames on `GET /ws`.
 {"t":"ping"}                                -> {"t":"pong"}
 ```
 
-The server greets with `{"t":"hello","host":...,"v":...}`. Unknown or malformed messages are ignored.
+The server greets with `{"t":"hello","host":...,"v":...}`. Unknown or malformed messages are ignored. `tests/fixtures/protocol.json` is the machine-checked list of what parses and what is refused: `tests/protocol.rs` checks it against the server and `tests/frontend_protocol.test.mjs` checks that the page sends nothing else.
 
 Plain HTTP routes next to the socket:
 - `GET /icon/<key>.png`: window and app icons. Keys are issued by the server in `win.list` / `app.list`, so clients can only fetch or launch things the server itself found.
@@ -198,7 +213,7 @@ Read before turning it on:
 ## Security
 
 - **Plain HTTP.** Nothing on the network is encrypted, so someone who can watch your Wi-Fi traffic can read what you type and could steal a paired phone's key cookie. Pairing keeps strangers out, it does not hide traffic. HTTPS is on the roadmap. With `--no-pairing`, anyone who can reach port 1990 can control the PC (type keys, shut down, read or write the clipboard).
-- **Pairing.** The PC shows a one-time offer (QR link plus 6-digit code, valid 2 minutes, usable once). A phone that proves it has the offer gets a random 256-bit key as an `HttpOnly`, `SameSite=Strict` cookie, so the key never appears in a URL and page scripts cannot read it. The PC stores only a SHA-256 hash of each key. Five wrong guesses in a row pause pairing for 5 minutes and burn the offer. Revoking a phone cuts its open connection within a few seconds. The PC itself (loopback) never needs to pair. Everything except the page, the manifest, the icons and the pairing routes needs a paired phone.
+- **Pairing.** The PC shows a one-time offer (a 6-digit code, a QR and a link from one offer, valid 5 minutes, usable once). A phone that proves it has the offer gets a random 256-bit key as an `HttpOnly`, `SameSite=Strict` cookie, so the key never appears in a URL and page scripts cannot read it. The PC stores only a SHA-256 hash of each key. Five wrong guesses in a row pause pairing for 5 minutes and burn the offer. Revoking a phone cuts its open connection within a few seconds. The PC itself (loopback) never needs to pair. Everything except the page, the manifest, the icons and the pairing routes needs a paired phone.
 - `/admin` answers only loopback requests with a loopback `Host` header.
 - **Other websites cannot reach the app.** Every request must use an address a person would type (an IP address, `localhost`, this PC's name or a `.local` name), which blocks DNS rebinding. A request that carries an `Origin` (every browser WebSocket and cross-site fetch does) must come from the page the app itself serves. Scripts and tools without an `Origin` still work.
 - Input is clamped (move, scroll, text length); `open` accepts only `http`/`https` URLs without whitespace; app launches and icons only by server-issued keys.
@@ -235,7 +250,7 @@ See `CLAUDE.md` for contributor conventions and gotchas.
 
 **Next**
 - [ ] Several computers: add, save and switch between PCs from the phone (removed for now; the page just connects to the PC it came from)
-- [ ] Pairing extras: rename a phone, per-phone permissions, an alert when a new phone pairs
+- [ ] Pairing extras: per-phone permissions, an alert when a new phone pairs
 - [ ] Settings page on the admin site: hostname, connected devices
 - [ ] mDNS discovery (`_openremote._tcp`) so native clients can find the PC
 - [ ] Foreground-app push, so the phone can adapt to the active program
