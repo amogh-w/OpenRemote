@@ -34,20 +34,20 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/pad.png" width="190"><br><sub>Pad</sub></td>
-    <td align="center"><img src="docs/screenshots/gestures.png" width="190"><br><sub>First-run gestures</sub></td>
-    <td align="center"><img src="docs/screenshots/type.png" width="190"><br><sub>Type</sub></td>
-    <td align="center"><img src="docs/screenshots/media.png" width="190"><br><sub>Media</sub></td>
+    <td align="center"><img src="docs/screenshots/pad.gif" width="190"><br><sub>Pad</sub></td>
+    <td align="center"><img src="docs/screenshots/gestures.gif" width="190"><br><sub>First-run gestures</sub></td>
+    <td align="center"><img src="docs/screenshots/type.gif" width="190"><br><sub>Type</sub></td>
+    <td align="center"><img src="docs/screenshots/media.gif" width="190"><br><sub>Media</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/windows.png" width="190"><br><sub>Open windows</sub></td>
-    <td align="center"><img src="docs/screenshots/launcher.png" width="190"><br><sub>App launcher</sub></td>
-    <td align="center"><img src="docs/screenshots/more.png" width="190"><br><sub>More sheet</sub></td>
-    <td align="center"><img src="docs/screenshots/settings.png" width="190"><br><sub>Settings</sub></td>
+    <td align="center"><img src="docs/screenshots/windows.gif" width="190"><br><sub>Open windows</sub></td>
+    <td align="center"><img src="docs/screenshots/launcher.gif" width="190"><br><sub>App launcher</sub></td>
+    <td align="center"><img src="docs/screenshots/more.gif" width="190"><br><sub>More sheet</sub></td>
+    <td align="center"><img src="docs/screenshots/settings.gif" width="190"><br><sub>Settings</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/screenshots/light-type.png" width="190"><br><sub>Latte + mauve</sub></td>
-    <td align="center"><img src="docs/screenshots/light-windows.png" width="190"><br><sub>Latte windows</sub></td>
+    <td align="center"><img src="docs/screenshots/light-type.gif" width="190"><br><sub>Latte + mauve</sub></td>
+    <td align="center"><img src="docs/screenshots/light-windows.gif" width="190"><br><sub>Latte windows</sub></td>
     <td></td>
     <td></td>
   </tr>
