@@ -212,7 +212,9 @@
      UI.play(el, "fade" | "pop" | "slide" | "shake" | "stagger", duration)  replays an entrance animation.
        "stagger" rises the first 6 children one after another.
      UI.reveal(img)         <img> inside a .skel wrapper: the wrapper shimmers until the picture loads, then it fades in.
-     UI.loadBg(el, url, cb) background-image that fades in once it has loaded (cb runs then, e.g. to remove a skeleton). */
+     UI.loadBg(el, url, cb) background-image that fades in once it has loaded (cb runs then, e.g. to remove a skeleton).
+     UI.go(change, "push" | "pop" | "fade")  runs change() (which swaps the page) as one view transition.
+     UI.setChildren(box, nodes)  sets box's children, keeping unchanged ones in place so only new ones animate in. */
   const play = (el, kind = "fade", dur) => {
     if (!el) return;
     el.classList.remove("anim", "m-pop", "m-slide", "m-fade", "m-shake", "m-stagger");
@@ -221,18 +223,39 @@
     void el.offsetWidth; // restart the animation
     el.classList.add("anim", "m-" + kind);
   };
+  // A picture from the cache shows at once. Only one still loading after 80ms is hidden and faded in, so
+  // re-rendering a list of cached pictures never flashes the skeleton color.
   const reveal = (img) => {
-    img.classList.add("opacity-0", "transition-opacity", "duration-300");
+    let slow = 0;
     const done = () => {
+      clearTimeout(slow);
       img.classList.remove("opacity-0");
       const w = img.closest(".skel");
       if (w) w.classList.remove("skel");
     };
-    if (img.complete && img.naturalWidth) done();
-    else {
-      img.addEventListener("load", done, { once: true });
-      img.addEventListener("error", done, { once: true });
-    }
+    if (img.complete && img.naturalWidth) return done();
+    img.classList.add("transition-opacity", "duration-300");
+    slow = setTimeout(() => img.classList.add("opacity-0"), 80);
+    img.addEventListener("load", done, { once: true });
+    img.addEventListener("error", done, { once: true });
+  };
+  // Page changes: the old and new page move together, so there is never a blank frame. Falls back to an
+  // instant swap without View Transitions or with reduced motion.
+  const go = (change, nav = "fade") => {
+    if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return change();
+    document.documentElement.dataset.nav = nav;
+    document.startViewTransition(change);
+  };
+  // A child is unchanged when it has the same data-sig, or else the same HTML apart from inline style.
+  // Build each new child with a data-sig (an id plus whatever changes how it looks) when its HTML can vary.
+  const childKey = (n) => n.dataset?.sig || n.outerHTML.replace(/ style="[^"]*"/g, "");
+  const setChildren = (box, nodes) => {
+    const pool = new Map();
+    for (const c of box.children) { const k = childKey(c); pool.has(k) ? pool.get(k).push(c) : pool.set(k, [c]); }
+    const next = nodes.map((n) => pool.get(childKey(n))?.shift() || n);
+    const keep = new Set(next);
+    [...box.children].forEach((c) => { if (!keep.has(c)) c.remove(); });
+    next.forEach((n, i) => { if (box.children[i] !== n) box.insertBefore(n, box.children[i] || null); });
   };
   const loadBg = (el, url, onShown) => {
     if (!el) return;
@@ -306,5 +329,5 @@
     });
 
   icons();
-  window.UI = { icon, icons, toast, sheetDrag, play, reveal, loadBg, confirm };
+  window.UI = { icon, icons, toast, sheetDrag, play, reveal, loadBg, go, setChildren, confirm };
 })();
