@@ -17,7 +17,7 @@ $env:PATH="$env:USERPROFILE\.cargo\bin;$env:PATH"
 cargo test                              # all unit + end-to-end tests (should stay green)
 cargo build --release                   # needs a running openremote.exe to be stopped first
 node --check assets/ui/app.js           # syntax check of the web app script
-.\scripts\check.ps1                     # fmt + clippy (-D warnings) + tests + node --check, same as CI
+.\scripts\check.ps1                     # fmt + clippy (-D warnings) + tests + node --check (the full local check)
 node C:\Users\Amogh\Projects\cuppa\scripts\harness.mjs status   # report drift of the kit and shared code from the masters (sync --write repairs)
 node C:\Users\Amogh\Projects\cuppa\scripts\harness.mjs lint openremote   # UI rules: tokens, motion scale, radii, type scale, theme, icons (also a step of check.ps1)
 npm run build                           # after UI changes: regenerate assets/ui/app.css + icons.html (Node; commit the output)
