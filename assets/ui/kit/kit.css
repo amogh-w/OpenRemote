@@ -240,13 +240,16 @@
   .appear > *, .appear-self { animation: appear 0.28s var(--ease) backwards; }
 
   /* ---- Page transitions (UI.go) ----
-     One view transition per page change: "push" slides forward, "pop" slides back, "fade" cross-fades (tabs).
+     One view transition per page change: "push" slides forward, "pop" slides back, "fade" is for tabs: the old page goes at once
+     and the new one fades in. It never cross-fades, because the old page's buttons would show through the new page's at other positions.
      Give persistent chrome its own name (view-transition-name: app-header / app-bar) so it stays put. */
   ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; animation-timing-function: var(--ease); }
   html[data-nav="push"]::view-transition-old(root) { animation-name: page-out-left; }
   html[data-nav="push"]::view-transition-new(root) { animation-name: page-in-right; }
   html[data-nav="pop"]::view-transition-old(root) { animation-name: page-out-right; }
   html[data-nav="pop"]::view-transition-new(root) { animation-name: page-in-left; }
+  html[data-nav="fade"]::view-transition-old(root) { animation: none; opacity: 0; }
+  html[data-nav="fade"]::view-transition-new(root) { animation: fade 0.2s var(--ease) both; }
 
   /* ---- Overlays (native <dialog>, popover) ---- */
   dialog { @apply m-auto max-h-none max-w-none bg-transparent p-0 text-text; }
