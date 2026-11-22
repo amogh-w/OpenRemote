@@ -1,4 +1,4 @@
-//! Pairing: which phones may control this PC. Shared by OpenRemote and Kai Remote: edit it in
+//! Pairing: which phones may control this PC. Shared by every project that uses it: edit it in
 //! the cuppa plugin repo (shared/) and run `harness.mjs sync --write`, never in a project copy. Each crate
 //! defines `PAIRING_COOKIE` in its `lib.rs`.
 //!
@@ -10,7 +10,7 @@
 use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -116,6 +116,42 @@ fn clean_name(name: &str) -> String {
     }
 }
 
+/// Write a file so that a crash halfway leaves the old one intact: write a sibling `.tmp`, then rename it over the target.
+pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    std::fs::write(&tmp, text)?;
+    std::fs::rename(&tmp, path)
+}
+
+/// Move a file that could not be read to `<name>.bad`, so the next save does not overwrite the only copy.
+pub fn set_aside(path: &Path) {
+    let mut bad = path.as_os_str().to_owned();
+    bad.push(".bad");
+    let _ = std::fs::rename(path, PathBuf::from(bad));
+}
+
+/// The saved devices. A missing file is a first run. A file that cannot be read as devices is set aside and logged, so one
+/// bad write cannot silently unpair every phone at the next save.
+fn load_devices(path: Option<&Path>) -> Vec<Device> {
+    let Some(path) = path else { return Vec::new() };
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(e) => {
+            set_aside(path);
+            crate::applog::warn(&format!("cannot read the paired devices ({e}); kept as {}.bad", path.display()));
+            return Vec::new();
+        }
+    };
+    serde_json::from_str(&text).unwrap_or_else(|e| {
+        set_aside(path);
+        crate::applog::warn(&format!("the paired devices file is damaged ({e}); kept as {}.bad", path.display()));
+        Vec::new()
+    })
+}
+
 /// The key from a `Cookie` request header, if it has the right shape (64 hex characters).
 pub fn key_from_cookie(header: &str) -> Option<&str> {
     header
@@ -127,11 +163,7 @@ pub fn key_from_cookie(header: &str) -> Option<&str> {
 impl Pairing {
     /// `path` is where paired devices are kept (`None` keeps them in memory only, for tests).
     pub fn new(required: bool, path: Option<PathBuf>) -> Self {
-        let devices = path
-            .as_ref()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|t| serde_json::from_str::<Vec<Device>>(&t).ok())
-            .unwrap_or_default();
+        let devices = load_devices(path.as_deref());
         Self {
             required,
             trust_loopback: true,
@@ -182,7 +214,7 @@ impl Pairing {
         }
         match serde_json::to_string_pretty(&inner.devices) {
             Ok(text) => {
-                if let Err(e) = std::fs::write(path, text) {
+                if let Err(e) = write_atomic(path, &text) {
                     crate::applog::error(&format!("cannot save paired devices: {e}"));
                 }
             }
@@ -196,13 +228,18 @@ impl Pairing {
     }
 
     /// Like `new_offer`, but the phone that redeems it is named `label` (typed on the PC) instead of by its browser.
+    /// Only the person at the PC can ask for an offer, so it also lifts a lockout: otherwise anyone on the network
+    /// could keep pairing locked just by sending wrong codes.
     pub fn new_offer_for(&self, label: Option<&str>) -> Offer {
         let mut rng = rand::rng();
         let code = format!("{:06}", rng.random_range(0..1_000_000u32));
         let mut s = [0u8; 16];
         rng.fill_bytes(&mut s);
         let secret = hex(&s);
-        self.lock_inner().pending = Some(Pending {
+        let mut inner = self.lock_inner();
+        inner.locked_until = None;
+        inner.fails = 0;
+        inner.pending = Some(Pending {
             label: label.map(clean_name),
             code: code.clone(),
             secret: secret.clone(),
@@ -385,6 +422,35 @@ mod tests {
     }
 
     #[test]
+    fn a_new_offer_from_the_pc_lifts_the_lockout() {
+        let p = Pairing::new(true, None).with_limits(Duration::from_secs(120), 2, Duration::from_secs(600));
+        let o = p.new_offer();
+        let wrong = if o.code == "000000" { "111111" } else { "000000" };
+        assert_eq!(p.pair(wrong, "x"), Err(PairError::Invalid));
+        assert!(matches!(p.pair(wrong, "x"), Err(PairError::Locked(_))));
+        // the owner asks for a fresh offer: the phone in front of them can pair at once
+        let fresh = p.new_offer();
+        assert!(p.pair(&fresh.code, "x").is_ok());
+    }
+
+    #[test]
+    fn a_damaged_devices_file_is_kept_aside_not_overwritten() {
+        let dir = std::env::temp_dir().join(format!("pairing-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("devices.json");
+        std::fs::write(&path, "[{\"id\": \"half a wri").unwrap();
+        let p = Pairing::new(true, Some(path.clone()));
+        assert!(p.devices().is_empty());
+        let o = p.new_offer();
+        let key = p.pair(&o.code, "Pixel").unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join("devices.json.bad")).unwrap(), "[{\"id\": \"half a wri");
+        assert!(Pairing::new(true, Some(path.clone())).check(&key).is_some());
+        assert!(!dir.join("devices.json.tmp").exists(), "the temp file is renamed away");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn revoking_removes_access() {
         let p = p();
         let o = p.new_offer();
@@ -398,7 +464,7 @@ mod tests {
 
     #[test]
     fn devices_survive_a_restart_and_only_hashes_are_stored() {
-        let path = std::env::temp_dir().join(format!("openremote-devices-{}.json", std::process::id()));
+        let path = std::env::temp_dir().join(format!("pairing-devices-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let p = Pairing::new(true, Some(path.clone()));
         let key = {

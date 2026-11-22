@@ -1,4 +1,4 @@
-/* remote-client.js - the phone's one WebSocket link to the PC. Shared by OpenRemote and Kai Remote:
+/* remote-client.js - the phone's one WebSocket link to the PC. Shared by every project that uses it:
    edit it in the cuppa plugin repo (shared/) and run harness.mjs sync --write, never in a project copy.
 
    const link = RemoteLink({

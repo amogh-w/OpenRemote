@@ -1,4 +1,4 @@
-//! The admin dashboard: a page and a small JSON API for the person at this PC. Shared by OpenRemote and Kai Remote:
+//! The admin dashboard: a page and a small JSON API for the person at this PC. Shared by every project that uses it:
 //! edit it in the cuppa plugin repo (shared/) and run `harness.mjs sync --write`, never in a project copy.
 //!
 //! Everything here answers only the PC itself: the peer address and the `Host` header must both be loopback (the
@@ -20,7 +20,7 @@ use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 
 /// What the dashboard and the tray need from an app.
 pub trait AdminHost: PairHost {
-    /// Product name, for the page and the tray ("OpenRemote").
+    /// Product name, for the page and the tray ("My App").
     fn name(&self) -> &str;
     fn hostname(&self) -> String;
     fn version(&self) -> &str;

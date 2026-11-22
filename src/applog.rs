@@ -1,7 +1,7 @@
-//! A tiny file log, shared by OpenRemote and Kai Remote: edit it in the cuppa plugin
+//! A tiny file log, shared by every project that uses it: edit it in the cuppa plugin
 //! repo (shared/) and run `harness.mjs sync --write`, never in a project copy.
 //!
-//! Console output is lost in release builds that have no console (OpenRemote runs as a Windows GUI program), so
+//! Console output is lost in release builds that have no console, so
 //! events worth finding later go to a file as well. One line per event, UTC time, the file rotates at 512 KB and
 //! keeps one older copy (`<name>.1`). Never log keys, pairing secrets, stream links or other private data.
 use std::fs::{self, OpenOptions};

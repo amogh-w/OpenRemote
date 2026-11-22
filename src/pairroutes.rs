@@ -1,4 +1,4 @@
-//! The phone's side of pairing: type the code (or open the QR link) and get a key. Shared by OpenRemote and Kai Remote:
+//! The phone's side of pairing: type the code (or open the QR link) and get a key. Shared by every project that uses it:
 //! edit it in the cuppa plugin repo (shared/) and run `harness.mjs sync --write`, never in a project copy.
 //!
 //! Three routes, all reachable before a phone is paired (the page shows the pairing screen): `POST /pair` (code or

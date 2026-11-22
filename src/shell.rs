@@ -1,5 +1,5 @@
 //! Process shell: console attach, message boxes, single instance, restart, small desktop helpers and the system-tray
-//! icon. Shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and run
+//! icon. Shared by every project that uses it: edit it in the cuppa plugin repo (shared/) and run
 //! `harness.mjs sync --write`, never in a project copy. Each crate defines `APP_NAME` in its `lib.rs`.
 //!
 //! The release builds are GUI-subsystem programs (no console window). `attach_console` reconnects stdout/stderr when
@@ -160,6 +160,7 @@ mod imp {
         let pair = MenuItem::new("Pair a phone", true, None);
         let copy = MenuItem::new("Copy phone link", true, None);
         let pause = CheckMenuItem::new("Pause pairing", true, host.pairing().paused(), None);
+        crate::autostart::refresh();
         let auto = CheckMenuItem::new("Start with Windows", true, crate::autostart::enabled(), None);
         let logs = MenuItem::new("Open log folder", true, None);
         let again = MenuItem::new("Restart", true, None);
@@ -247,6 +248,10 @@ mod imp {
                     pause.set_checked(host.pairing().paused());
                 }
                 if last_tip.elapsed() >= Duration::from_secs(4) {
+                    let on = crate::autostart::enabled();
+                    if auto.is_checked() != on {
+                        auto.set_checked(on);
+                    }
                     let _ = tray.set_tooltip(Some(tooltip(&*host)));
                     last_tip = Instant::now();
                 }

@@ -1,4 +1,4 @@
-//! Host and Origin checks for the phone-facing server. Shared by OpenRemote and Kai Remote: edit it in
+//! Host and Origin checks for the phone-facing server. Shared by every project that uses it: edit it in
 //! the cuppa plugin repo (shared/) and run `harness.mjs sync --write`, never in a project copy.
 use std::net::IpAddr;
 

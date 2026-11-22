@@ -1,4 +1,4 @@
-// The dashboard script. Shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and run
+// The dashboard script. Shared by every project that uses it: edit it in the cuppa plugin repo (shared/) and run
 // harness.mjs sync --write, never in a project copy. Talks to /admin/api/* (see admin.rs).
 (() => {
   'use strict';

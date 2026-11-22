@@ -1,4 +1,4 @@
-// The phone's side of pairing: the code screen, the `?pair=` link and unpairing. Shared by OpenRemote and Kai Remote:
+// The phone's side of pairing: the code screen, the `?pair=` link and unpairing. Shared by every project that uses it:
 // edit it in the cuppa plugin repo (shared/) and run harness.mjs sync --write, never in a project copy.
 // It drives the markup in pair-screen.html (#pair, #pairform, #paircode, #pairmsg) and the routes in pairroutes.rs.
 //

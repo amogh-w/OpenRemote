@@ -1,11 +1,12 @@
-//! Sleep timer, shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and run
+//! Sleep timer, shared by every project that uses it: edit it in the cuppa plugin repo (shared/) and run
 //! harness.mjs sync --write, never in a project copy. The phone only starts, cancels and displays it; the daemon decides when the PC sleeps.
 //!
 //! One `State` behind a mutex holds a generation counter and the current timer (at most one). Starting, replacing and
-//! cancelling bump the generation; a watcher thread carries the generation it was spawned with and exits quietly when
-//! it is no longer current, so a replaced or cancelled timer can never fire.
+//! cancelling bump the generation and wake the watchers; a watcher thread carries the generation it was spawned with
+//! and exits quietly when it is no longer current, so a replaced or cancelled timer can never fire. A watcher sleeps
+//! on a `Condvar` until its deadline, so waiting costs nothing and a cancel ends the thread at once.
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 /// Longest timer a phone can ask for.
@@ -14,7 +15,6 @@ pub const MAX_SECS: u64 = 12 * 3600;
 const GRACE: Duration = Duration::from_secs(2);
 /// An episode timer that finds more than this left (paused, or seeked back) moves its deadline instead of sleeping.
 const MORE_LEFT: f64 = 3.0;
-const TICK: Duration = Duration::from_millis(200);
 
 /// What is playing right now.
 pub struct Media {
@@ -51,8 +51,9 @@ struct State {
 
 struct Inner {
     state: Mutex<State>,
+    /// Signalled when the generation changes or a deadline moves.
+    wake: Condvar,
     host: Box<dyn Host>,
-    tick: Duration,
 }
 
 #[derive(Clone)]
@@ -76,11 +77,7 @@ fn status(key: &str, s: &State, err: Option<&str>) -> Value {
 
 impl SleepTimer {
     pub fn new(host: impl Host) -> Self {
-        Self::with_tick(host, TICK)
-    }
-
-    fn with_tick(host: impl Host, tick: Duration) -> Self {
-        Self(Arc::new(Inner { state: Mutex::default(), host: Box::new(host), tick }))
+        Self(Arc::new(Inner { state: Mutex::default(), wake: Condvar::new(), host: Box::new(host) }))
     }
 
     pub fn get(&self) -> Value {
@@ -91,6 +88,7 @@ impl SleepTimer {
         let mut s = self.0.state.lock().unwrap();
         s.generation += 1;
         s.timer = None;
+        self.0.wake.notify_all();
         status(self.0.host.key(), &s, None)
     }
 
@@ -119,6 +117,7 @@ impl SleepTimer {
         s.generation += 1;
         s.timer = Some(timer);
         let generation = s.generation;
+        self.0.wake.notify_all(); // an older watcher exits now instead of at its old deadline
         let out = status(self.0.host.key(), &s, None);
         drop(s);
         let this = self.clone();
@@ -133,22 +132,25 @@ impl SleepTimer {
 
     fn watch(&self, generation: u64) {
         let inner = &*self.0;
+        let mut s = inner.state.lock().unwrap();
         loop {
-            std::thread::sleep(inner.tick);
-            let s = inner.state.lock().unwrap();
             if s.generation != generation {
                 return;
             }
             let Some(t) = s.timer.as_ref() else { return };
-            if Instant::now() < t.deadline {
+            let (deadline, title) = (t.deadline, t.title.clone());
+            let now = Instant::now();
+            if now < deadline {
+                // sleep until the deadline; a cancel, a replacement or a spurious wake-up just goes round again
+                s = inner.wake.wait_timeout(s, deadline - now).unwrap().0;
                 continue;
             }
-            let Some(title) = t.title.clone() else {
+            let Some(title) = title else {
                 return self.fire(s);
             };
             drop(s);
             let media = inner.host.media();
-            let mut s = inner.state.lock().unwrap();
+            s = inner.state.lock().unwrap();
             if s.generation != generation {
                 return;
             }
@@ -195,7 +197,7 @@ mod tests {
     fn rig(media: Option<Media>) -> (SleepTimer, Arc<Mutex<Option<Media>>>, Arc<AtomicUsize>) {
         let media = Arc::new(Mutex::new(media));
         let slept = Arc::new(AtomicUsize::new(0));
-        let t = SleepTimer::with_tick(Mock { media: media.clone(), slept: slept.clone() }, Duration::from_millis(5));
+        let t = SleepTimer::new(Mock { media: media.clone(), slept: slept.clone() });
         (t, media, slept)
     }
 
@@ -228,6 +230,20 @@ mod tests {
         wait();
         assert_eq!(slept.load(Ordering::SeqCst), 0, "a replaced timer never fires");
         assert_eq!(t.get()["on"], true);
+    }
+
+    #[test]
+    fn a_waiting_timer_costs_a_thread_that_ends_the_moment_it_is_cancelled_or_replaced() {
+        let (t, _, _) = rig(None);
+        t.set(Some(3600), false);
+        wait();
+        assert_eq!(Arc::strong_count(&t.0), 2, "the timer plus its one watcher");
+        t.set(Some(7200), false);
+        wait();
+        assert_eq!(Arc::strong_count(&t.0), 2, "the replaced timer's watcher is gone, the new one waits");
+        t.cancel();
+        wait();
+        assert_eq!(Arc::strong_count(&t.0), 1, "no watcher is left after a cancel");
     }
 
     #[test]
@@ -265,6 +281,7 @@ mod tests {
         // The title changed (next episode started): sleep.
         *media.lock().unwrap() = Some(Media { pos: 0.0, dur: 100.0, title: "b".into() });
         t.0.state.lock().unwrap().timer.as_mut().unwrap().deadline = Instant::now();
+        t.0.wake.notify_all(); // the test moves the deadline from outside; the real code only does it inside the watcher
         wait();
         assert_eq!(slept.load(Ordering::SeqCst), 1);
     }
