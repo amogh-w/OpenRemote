@@ -11,7 +11,9 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **Touchpad** with tap to click, two-finger tap to right-click, two-finger scroll, tap-then-hold to drag, a scroll strip, and labeled Left / Mid / Right buttons that you can hold.
 - **Keyboard**: on-screen QWERTY with number row, symbols, shift and caps, key pop-ups and hold-to-repeat; sticky Ctrl/Alt/Shift/Win for shortcuts; or your phone's own keyboard (emoji, other languages, swipe typing).
 - **Special keys**: Fn row, numpad, navigation block, arrows.
-- **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen. A **sleep timer** (see below) puts the PC to sleep after a set time or when the episode ends.
+- **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen. A **sleep timer** (see below) puts the PC to sleep after a set time.
+- **Monitor modes** under More > Monitor: both screens (extend) or the main monitor only, with Windows' own `DisplaySwitch.exe`.
+- **Launch screen**: the page opens on the app logo and fades into the remote as soon as the PC answers.
 
 **Windows**
 - **App switcher**: live list of open windows with real icons; focus, minimize, maximize, restore or close each one. The active window is highlighted.
@@ -100,7 +102,7 @@ A phone pairs once, then stays paired until it is removed. The dashboard shows o
 
 ## Sleep timer
 
-Choose 10 sec (a test), 15, 30 or 45 min, 1 or 2 hours, or the end of the episode. The PC keeps the countdown, so it still sleeps if the phone disconnects, and every connected phone shows the same timer. An end-of-episode timer waits while the episode is still playing (paused, for example). It can be cancelled at any time.
+Choose 10 sec (a test), 15, 30 or 45 min, or 1 or 2 hours. The PC keeps the countdown, so it still sleeps if the phone disconnects, and every connected phone shows the same timer. It can be cancelled at any time.
 
 ## Architecture
 
@@ -161,13 +163,13 @@ JSON text frames on `GET /ws`.
 {"t":"scroll","dx":0,"dy":120}              120 = one notch; positive dy scrolls down
 {"t":"key","k":"ctrl+shift+t","s":"down|up"}  s omitted = press; names in command.rs
 {"t":"text","v":"hello"}                    typed as unicode
+{"t":"display","m":"dual|main"}                 both monitors, or the main one only (the two `DisplaySwitch.exe` modes `/extend` and `/external`)
 {"t":"power","a":"lock|sleep|hibernate|logoff|restart|shutdown"}
 {"t":"open","url":"https://..."}            http(s) only, opened in the default browser
 {"t":"clip.set","text":"..."}               replace PC clipboard text (max 256 KB) -> {"t":"clip.ack","ok":true|false}
 {"t":"clip.get"}                            -> {"t":"clip","text":"...","image":{"w":..,"h":..}|null}
 {"t":"media.get"}                           -> {"t":"media","state":"playing|paused|stopped|none","title":"..","artist":"..","app":"..","pos":s,"dur":s,"art":bool}
-{"t":"sleep.set","secs":s}                    -> {"t":"sleep","on":true,"left":s,"total":s,"episode":bool}  (or {"on":false,"err":"bad-time"}); secs is capped at 12 h
-{"t":"sleep.set","episode":true}                -> same; ends when the playing item ends ({"on":false,"err":"no-episode"} if its length is unknown)
+{"t":"sleep.set","secs":s}                    -> {"t":"sleep","on":true,"left":s,"total":s}  (or {"on":false,"err":"bad-time"}); secs is capped at 12 h
 {"t":"sleep.cancel"} / {"t":"sleep.get"}        -> {"t":"sleep","on":false} / the current timer
 {"t":"win.list"}                            -> {"t":"win.list","items":[{id,title,exe,icon,minimized,maximized,foreground}]}
 {"t":"win.act","id":123,"a":"focus|min|max|restore|close"}
