@@ -147,7 +147,7 @@
       else if (m.t === 'sleep') gotSleep(m);
       else if (m.t === 'clip') gotClip(m);
       else if (m.t === 'clip.ack') gotAck(m);
-      else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; store.set('or_wins', winItems); renderWins(); }
+      else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; $('#winlist').classList.remove('stale'); store.set('or_wins', winItems); renderWins(); }
       else if (m.t === 'app.list') { appItems = m.items || []; appsLoaded = true; store.set('or_apps', appItems); renderApps(); }
     },
     onClose: ({ retry }) => {
@@ -743,11 +743,26 @@
 
   // ---- monitor: both screens, or the main one only
   const DISPLAY_NOTE = { dual: 'Using both monitors', main: 'Main monitor only' };
+  // Main monitor only can leave the screen you were looking at dark, and the phone is the way back. So it asks, and goes
+  // back to both screens by itself if nobody answers within 15 s.
+  async function keepMainOnly() {
+    let left = 15;
+    const dlg = () => document.querySelector('dialog[aria-labelledby="ui-confirm-title"]');
+    const text = () => 'Going back to both screens in ' + left + ' s unless you keep this.';
+    const answer = UI.confirm({ title: 'Keep main monitor only?', text: text(), ok: 'Keep', cancel: 'Go back', icon: 'monitor' });
+    const tick = setInterval(() => {
+      const d = dlg(); if (!d) return;
+      if (--left <= 0) d.querySelector('[data-c="cancel"]').click(); else d.querySelector('[data-c="text"]').textContent = text();
+    }, 1000);
+    const keep = await answer; clearInterval(tick);
+    if (!keep) { send({ t: 'display', m: 'dual' }); toast(DISPLAY_NOTE.dual, { icon: 'monitor' }); }
+  }
   $$('[data-display]').forEach((b) => {
     b.onclick = () => {
       const m = b.dataset.display;
       send({ t: 'display', m });
       toast(DISPLAY_NOTE[m], { icon: 'monitor' }); buzz(); closeSheet();
+      if (m === 'main') setTimeout(keepMainOnly, 2500);   // Windows needs a moment to switch
     };
   });
 
@@ -801,7 +816,7 @@
   applyTheme();   // theme.js ran in the head, before the settings buttons existed: mark the chosen flavor, accent and radius
   paintSettings(); paintMods();
   go(page); started = true;
-  if (winLoaded) renderWins();   // the last windows and apps are on screen at once, before the PC answers
+  if (winLoaded) { renderWins(); $('#winlist').classList.add('stale'); }   // the last windows are on screen at once, dimmed until the PC answers
   boot();
   if (!store.get('or_seen_hint', false) && page === 'pad') setTimeout(showCoach, 700);
 })();

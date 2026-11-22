@@ -32,11 +32,10 @@
   /* Buttons and chips transition "all", which includes the visibility they inherit: a leaving page's buttons would linger ~200 ms
      and ghost onto the next page. A hidden page's contents never transition, so they are gone the moment the page is. */
   .page:not(.on) * { transition-duration: 0s !important; }
-  /* Every tab change is one view transition (the page itself moves; nothing else animates it, or it fades twice).
+  /* Every tab change is one view transition (the kit's "fade": the old page goes at once, the new one fades in; nothing else animates it).
      The header and the tab bar have their own names, so they stay put instead of ghosting with the page. */
-  /* No cross-fade: the old page's buttons would show through the new page's at other positions. The old page goes at once, the new fades in. */
-  html[data-nav="fade"]::view-transition-old(root) { animation: none; opacity: 0; }
-  html[data-nav="fade"]::view-transition-new(root) { animation: fade 0.2s var(--ease) both; }
+  #winlist { transition: opacity 0.2s var(--ease); }
+  #winlist.stale { opacity: 0.5; }   /* remembered windows, until the PC's list arrives */
   #top { view-transition-name: app-header; }
   #nav { view-transition-name: app-bar; }
 
@@ -231,7 +230,8 @@
   #splash .bar { width: 96px; }
 
   /* ---- toast ---- */
-  #toast { @apply pointer-events-none fixed left-1/2 z-[60] max-w-[calc(100vw-32px)]; top: calc(env(safe-area-inset-top) + 12px); animation: none; opacity: 0; transform: translate(-50%, -140%); transition: transform 0.4s var(--ease), opacity 0.2s; }
+  #toast { @apply pointer-events-none fixed left-1/2 z-[60] max-w-[calc(100vw-32px)]; width: max-content; top: calc(env(safe-area-inset-top) + 12px); animation: none; opacity: 0; transform: translate(-50%, -140%); transition: transform 0.4s var(--ease), opacity 0.2s; }
+  #appsearch::-webkit-search-cancel-button { display: none; }   /* our own clear button is the only one */
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   #toast.swap > * { animation: fade 0.2s var(--ease) both; }
   #toast svg { @apply text-blue; }
