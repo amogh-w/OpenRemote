@@ -22,6 +22,7 @@ node C:\Users\Amogh\Projects\cuppa\scripts\harness.mjs status   # report drift o
 node C:\Users\Amogh\Projects\cuppa\scripts\harness.mjs lint openremote   # UI rules: tokens, motion scale, radii, type scale, theme, icons (also a step of check.ps1)
 npm run build                           # after UI changes: regenerate assets/ui/app.css + icons.html (Node; commit the output)
 python tools/gen_icons.py               # regenerate PWA + tray icons (Pillow)
+python tools/gen_splash.py              # regenerate the iPhone launch images (assets/splash) and their tags in head.html
 Get-Process openremote | Stop-Process -Force
 Start-Process .\target\release\openremote.exe   # detached; release build has no console window
 ```

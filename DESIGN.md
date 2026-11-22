@@ -28,7 +28,7 @@ frontend on the phone, a small JSON protocol in between.
 | 19 | Sleep timer on the Media page (**done**) | The PC keeps the countdown and sleeps itself, so it works if the phone drops. See "Sleep timer" below. |
 
 | 20 | Monitor modes under More (**done**) | `{"t":"display","m":"dual\|main"}` runs `DisplaySwitch.exe /extend` or `/external`, the same two commands as the desktop shortcuts. The phone names a mode, never a command or a file. |
-| 21 | Launch screen (**done**) | The page ships with an in-markup splash (app glyph, name, loader) that shows from the first paint and fades once the PC answers, or after 5 s. Android's own splash comes from the manifest icon and `background_color`; iOS would need `apple-touch-startup-image` files (not done). |
+| 21 | Launch screen (**done**) | The page ships with an in-markup splash (app glyph, name, loader) that shows from the first paint and fades once the PC answers, or after 5 s. Android's own splash comes from the manifest icon and `background_color`; iPhones get `apple-touch-startup-image` launch images (every portrait size, dark and light), made by `tools/gen_splash.py` and served from `/splash/`. |
 
 Out of scope for now: Bluetooth transport, auto-update, screen mirroring, file transfer, telemetry.
 

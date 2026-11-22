@@ -13,7 +13,7 @@ One small Rust program on the PC serves a touch-friendly web app over your Wi-Fi
 - **Special keys**: Fn row, numpad, navigation block, arrows.
 - **Media remote** that follows what is playing: title, artist, cover art, a progress bar and a play/pause button that switches with the player (any app that reports to Windows: browsers, Spotify, VLC and more). Also next/previous, volume (hold to repeat), mute and fullscreen. A **sleep timer** (see below) puts the PC to sleep after a set time.
 - **Monitor modes** under More > Monitor: both screens (extend) or the main monitor only, with Windows' own `DisplaySwitch.exe`.
-- **Launch screen**: the page opens on the app logo and fades into the remote as soon as the PC answers.
+- **Launch screen**: the page opens on the app logo and fades into the remote as soon as the PC answers. iPhones show the same logo from the first frame (launch images for every portrait size, dark and light).
 
 **Windows**
 - **App switcher**: live list of open windows with real icons; focus, minimize, maximize, restore or close each one. The active window is highlighted.
@@ -231,7 +231,7 @@ assets/         sw.js (service worker), PWA and tray icons
 build.rs        Joins assets/ui/* into one page (no Node needed)
 package.json    Build-time only: `npm run build` regenerates app.css and the icon sprite
 tests/ws.rs     End-to-end tests: real server + WebSocket client + mock injector
-tools/          gen_icons.py (app icons)
+tools/          gen_icons.py (app icons), gen_splash.py (iPhone launch images)
 docs/           theme-config.md (Catppuccin role mapping), screenshots/
 DESIGN.md       Feature inventory and design notes
 ```
@@ -244,6 +244,7 @@ node --check assets/ui/app.js       # syntax-check the web app script
 cargo build --release               # stop a running openremote.exe first (it locks the file)
 npm install && npm run build        # regenerate assets/ui/app.css and icons.html after UI changes (needs Node)
 python tools/gen_icons.py           # regenerate PWA and tray icons (needs Pillow)
+python tools/gen_splash.py          # regenerate the iPhone launch images and their <link> tags
 ```
 
 See `CLAUDE.md` for contributor conventions and gotchas.
