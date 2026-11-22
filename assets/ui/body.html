@@ -1,3 +1,9 @@
+<!-- Launch screen: in the markup so it shows from the first paint; app.js fades it out once the PC answers. -->
+<div id="splash" aria-hidden="true">
+  <div class="tile"><svg class="size-12"><use href="#mouse"/></svg></div>
+  <b>OpenRemote</b>
+  <div class="bar bar-indet"><i></i></div>
+</div>
 <div id="app">
   <header id="top">
     <div id="chip" role="status">
@@ -34,12 +40,13 @@
       <div class="chips">
         <button class="chip" data-key="esc">Esc</button>
         <button class="chip" data-key="tab">Tab</button>
-        <button class="chip" data-mod="ctrl" aria-pressed="false">Ctrl</button>
-        <button class="chip" data-mod="alt" aria-pressed="false">Alt</button>
-        <button class="chip" data-mod="shift" aria-pressed="false">Shift</button>
-        <button class="chip" data-mod="win" aria-pressed="false">Win</button>
+        <button class="chip" data-mod="ctrl" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Ctrl</button>
+        <button class="chip" data-mod="alt" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Alt</button>
+        <button class="chip" data-mod="shift" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Shift</button>
+        <button class="chip" data-mod="win" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Win</button>
         <button class="chip" data-key="delete">Del</button>
       </div>
+      <p class="hint modhint"></p>
     </section>
 
     <!-- TYPE -->
@@ -58,15 +65,16 @@
         <div class="chips">
           <button class="chip" data-key="esc">Esc</button>
           <button class="chip" data-key="tab">Tab</button>
-          <button class="chip" data-mod="ctrl" aria-pressed="false">Ctrl</button>
-          <button class="chip" data-mod="alt" aria-pressed="false">Alt</button>
-          <button class="chip" data-mod="win" aria-pressed="false">Win</button>
+          <button class="chip" data-mod="ctrl" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Ctrl</button>
+          <button class="chip" data-mod="alt" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Alt</button>
+          <button class="chip" data-mod="win" aria-pressed="false"><svg class="size-3.5"><use href="#pin"/></svg>Win</button>
           <button class="chip" data-key="delete">Del</button>
           <button class="chip" data-key="left" data-repeat aria-label="Left"><svg class="size-4"><use href="#arrow-left"/></svg></button>
           <button class="chip" data-key="up" data-repeat aria-label="Up"><svg class="size-4"><use href="#arrow-up"/></svg></button>
           <button class="chip" data-key="down" data-repeat aria-label="Down"><svg class="size-4"><use href="#arrow-down"/></svg></button>
           <button class="chip" data-key="right" data-repeat aria-label="Right"><svg class="size-4"><use href="#arrow-right"/></svg></button>
         </div>
+        <p class="hint modhint"></p>
         <div class="kb" id="kbd"></div>
       </div>
     </section>
@@ -124,7 +132,6 @@
           <button class="chip" data-sleep="2700">45 min</button>
           <button class="chip" data-sleep="3600">1 hour</button>
           <button class="chip" data-sleep="7200">2 hours</button>
-          <button class="chip" data-sleep="episode"><svg class="size-4"><use href="#moon"/></svg>End of episode</button>
         </div>
         <div class="sl-run" id="sl-run" hidden>
           <div class="sl-top">
@@ -163,6 +170,7 @@
         <button class="row" data-view="browser"><span class="row-tile bg-blue"><svg class="size-4"><use href="#panel-top"/></svg></span><span class="flex-1"><b>Browser</b><small>Tabs, zoom, open a link</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
         <button class="row" data-view="keys"><span class="row-tile bg-mauve"><svg class="size-4"><use href="#command"/></svg></span><span class="flex-1"><b>Special keys</b><small>Fn row, numpad, modifiers</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
         <button class="row" data-view="clip"><span class="row-tile bg-teal"><svg class="size-4"><use href="#clipboard-copy"/></svg></span><span class="flex-1"><b>Clipboard</b><small>Text and images</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
+        <button class="row" data-view="monitor"><span class="row-tile bg-peach"><svg class="size-4"><use href="#monitor"/></svg></span><span class="flex-1"><b>Monitor</b><small>Both screens or the main one</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
         <button class="row" data-view="power"><span class="row-tile bg-red"><svg class="size-4"><use href="#power"/></svg></span><span class="flex-1"><b>Power</b><small>Shut down, restart, lock</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
         <button class="row" data-view="settings"><span class="row-tile bg-sky"><svg class="size-4"><use href="#settings"/></svg></span><span class="flex-1"><b>Settings</b><small>Theme, speed, install</small></span><svg class="size-4 text-overlay1"><use href="#chevron-right"/></svg></button>
       </div>
@@ -236,6 +244,14 @@
       <p class="hint mt-3" id="clipmsg"></p>
     </div>
 
+    <div class="sh-view" id="v-monitor">
+      <div class="group-list">
+        <button class="row" data-display="dual"><span class="row-tile bg-blue"><svg class="size-4"><use href="#columns-2"/></svg></span><span class="flex-1"><b>Dual monitor</b><small>Use both screens, side by side</small></span></button>
+        <button class="row" data-display="main"><span class="row-tile bg-peach"><svg class="size-4"><use href="#rectangle-horizontal"/></svg></span><span class="flex-1"><b>Main monitor only</b><small>Turn the other screen off</small></span></button>
+      </div>
+      <p class="hint mt-3">Windows takes a moment to switch. Switching back is the other row.</p>
+    </div>
+
     <div class="sh-view" id="v-power">
       <div class="group-list">
         <button class="row" data-power="shutdown"><span class="row-tile bg-red"><svg class="size-4"><use href="#power"/></svg></span><span class="flex-1"><b>Shut down</b><small>Turn the PC off</small></span></button>
@@ -282,7 +298,7 @@
           <span>Corners</span>
           <div class="flavors">
             <button class="chip" data-radius="tight" aria-pressed="false">Tight</button>
-            <button class="chip" data-radius="apple" aria-pressed="false">Apple</button>
+            <button class="chip" data-radius="regular" aria-pressed="false">Regular</button>
             <button class="chip" data-radius="soft" aria-pressed="false">Soft</button>
           </div>
         </div>
@@ -307,7 +323,7 @@
 </dialog>
 
 <!-- cuppa:pair-screen:start -->
-<!-- The phone's pairing screen. Shared by OpenRemote and Kai Remote: edit it in the cuppa plugin repo (shared/) and
+<!-- The phone's pairing screen. Shared by every project that uses it: edit it in the cuppa plugin repo (shared/) and
      run harness.mjs sync --write, never in a project copy. Driven by pair-client.js. -->
 <div id="pair" class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-mantle p-6" hidden>
   <div class="flex w-full max-w-[360px] flex-col items-center gap-3 text-center">

@@ -56,6 +56,8 @@ clipboard-copy
 image
 power
 monitor
+columns-2
+rectangle-horizontal
 house
 external-link
 copy
@@ -70,6 +72,7 @@ shield-check
 # power
 rotate-cw
 moon
+pin
 lock
 log-out
 arrow-down-to-line

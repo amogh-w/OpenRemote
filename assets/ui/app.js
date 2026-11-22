@@ -62,14 +62,35 @@
   $('#s-natural').onchange = (e) => { S.natural = e.target.checked; saveS(); buzz(); };
   $('#s-haptics').onchange = (e) => { S.haptics = e.target.checked; saveS(); buzz(); };
 
+  // Replay a one-shot animation class (`.swap`, `.flip`): drop it, force a reflow, add it back, remove it when it ends.
+  function flash(el, cls) {
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+  }
+
+  // ============================================================ splash
+  // The launch screen is in the markup, so it shows from the first paint. It fades out once the PC answers (or the pairing
+  // screen takes over), and after 5 s whatever happens, so an unreachable PC shows the page and its "Offline" state.
+  const splash = $('#splash'), splashAt = performance.now();
+  function hideSplash() {
+    if (!splash.isConnected || splash.classList.contains('gone')) return;
+    setTimeout(() => {
+      splash.classList.add('gone');
+      splash.addEventListener('transitionend', () => splash.remove(), { once: true });
+    }, Math.max(0, 450 - (performance.now() - splashAt)));   // never a flash: it stays at least a moment
+  }
+  setTimeout(hideSplash, 5000);
+
   // ============================================================ toast
   let toastT = 0;
   function toast(msg, o = {}) {
     const el = $('#toast');
+    const showing = el.classList.contains('show');   // a message already up: fade the new one in instead of swapping silently
     $('span', el).textContent = msg;
     el.classList.toggle('bad', !!o.bad);
     setIcon($('svg', el), o.icon || (o.bad ? 'wifi-off' : 'info'));
     el.classList.add('show');
+    if (showing) flash(el, 'swap');
     clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), o.ms || 2200);
   }
 
@@ -113,7 +134,7 @@
     onState: (s) => { if (s === 'connecting') { rtt = null; setConn('wait'); paintName(); } else if (s === 'down') setConn('off'); },
     onMessage: (m) => {
       if (m.t === 'hello') {
-        pc.name = m.host || pc.name; paintName(); setConn('on');
+        pc.name = m.host || pc.name; paintName(); setConn('on'); hideSplash();
         $('#helperstate').textContent = m.helper
           ? 'On. The mouse and keyboard also work on UAC prompts, administrator windows and the lock screen.'
           : 'Off. To use the mouse on UAC prompts, run "openremote --install-helper --yes" on the PC (see the README).';
@@ -126,8 +147,8 @@
       else if (m.t === 'sleep') gotSleep(m);
       else if (m.t === 'clip') gotClip(m);
       else if (m.t === 'clip.ack') gotAck(m);
-      else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; renderWins(); }
-      else if (m.t === 'app.list') { appItems = m.items || []; appsLoaded = true; renderApps(); }
+      else if (m.t === 'win.list') { winItems = m.items || []; winLoaded = true; store.set('or_wins', winItems); renderWins(); }
+      else if (m.t === 'app.list') { appItems = m.items || []; appsLoaded = true; store.set('or_apps', appItems); renderApps(); }
     },
     onClose: ({ retry }) => {
       if (online) { wasLost = true; toast('Connection lost', { bad: true }); }
@@ -159,7 +180,13 @@
 
   // ============================================================ keys + sticky modifiers
   const mods = new Set();
-  function paintMods() { $$('[data-mod]').forEach((b) => { const on = mods.has(b.dataset.mod); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); }); }
+  const MOD_NAMES = { ctrl: 'Ctrl', alt: 'Alt', shift: 'Shift', win: 'Win' };
+  function paintMods() {
+    $$('[data-mod]').forEach((b) => { const on = mods.has(b.dataset.mod); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+    // Ctrl, Alt, Shift and Win are not pressed by tapping them: they wait for the next key. Say so, and say what is waiting.
+    const text = mods.size ? [...mods].map((m) => MOD_NAMES[m]).join(' + ') + ' is on: now tap a key, or tap it again to cancel.' : 'Ctrl, Alt, Shift and Win wait for the next key you tap.';
+    $$('.modhint').forEach((el) => { el.textContent = text; });
+  }
   const sendKey = (k) => { send({ t: 'key', k: [...mods, k].join('+') }); if (mods.size) { mods.clear(); paintMods(); } if (/^media_/.test(k)) setTimeout(askMedia, 400); };
   const typed = (s) => { if (mods.size && s.length === 1) sendKey(s.toLowerCase()); else send({ t: 'text', v: s }); };
   $$('[data-mod]').forEach((b) => { b.onclick = () => { const m = b.dataset.mod; mods.has(m) ? mods.delete(m) : mods.add(m); paintMods(); buzz(); }; });
@@ -378,13 +405,15 @@
   PairClient.onPaired = async () => { paintPairing(await PairClient.status()); connect(); };
   $('#unpair').onclick = () => { link.stop(); closeSheet(); paintPairing(null); PairClient.unpair(); };
   async function boot() {
-    if (!(await PairClient.start())) return;
+    if (!(await PairClient.start())) { hideSplash(); return; }
     paintPairing(await PairClient.status());
     connect();
   }
 
   // ============================================================ apps: windows + launcher
-  let appsMode = 'open', winItems = [], appItems = [], winLoaded = false, appsLoaded = false, appsRequested = false;
+  // The last lists are remembered, so a page never opens on a skeleton while the PC is still answering.
+  const cached = (k) => { const v = store.get(k, []); return Array.isArray(v) ? v : []; };
+  let appsMode = 'open', winItems = cached('or_wins'), appItems = cached('or_apps'), winLoaded = winItems.length > 0, appsLoaded = appItems.length > 0, appsRequested = false;
   const iconUrl = (key) => {
     return key ? '/icon/' + key + '.png' : '';
   };
@@ -394,7 +423,12 @@
     const u = iconUrl(key);
     if (u) {
       const img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
-      img.onload = () => img.classList.add('ld'); img.onerror = () => s.classList.add('fail'); img.src = u;
+      // Only an icon that is really loading (not there within 80 ms, so not cached) shimmers and fades in.
+      const slow = setTimeout(() => img.classList.add('pending'), 80);
+      img.onload = () => { clearTimeout(slow); img.classList.remove('pending'); };
+      img.onerror = () => { clearTimeout(slow); img.classList.remove('pending'); s.classList.add('fail'); };
+      img.src = u;
+      if (img.complete && img.naturalWidth) clearTimeout(slow);
       s.prepend(img);
     } else s.classList.add('fail');
     return s;
@@ -521,7 +555,7 @@
 
   // ============================================================ media: now playing
   // While the Media page is open, ask the PC what is playing every 2 s; the progress bar advances locally in between.
-  let np = null, npAt = 0, npKey = '', npPoll = 0, npTick = 0;
+  let np = null, npAt = 0, npKey = '', npPoll = 0, npTick = 0, ppWas = null;
   const fmtT = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
   function askMedia() { if (online && page === 'media') { send({ t: 'media.get' }); send({ t: 'sleep.get' }); } }
   function startMedia() { stopMedia(); askMedia(); paintMedia(); paintSleep(); npPoll = setInterval(askMedia, 2000); npTick = setInterval(() => { paintMedia(); paintSleep(); }, sl ? 250 : 500); }
@@ -538,8 +572,11 @@
     $('#np-app').textContent = has && np.artist ? np.app : '';
     $('#np').classList.toggle('idle', !has);
     $('#pp use').setAttribute('href', playing ? '#pause' : '#play');
+    if (ppWas !== null && ppWas !== playing) flash($('#pp'), 'flip');
+    ppWas = playing;
     const key = has ? [np.title, np.artist, np.app, np.art].join('|') : '';
-    if (key !== npKey) {   // a new track: reload the cover
+    if (key !== npKey) {   // a new track: fade it in and reload the cover
+      flash($('.np-top'), 'swap');
       npKey = key; npImg.hidden = true;
       if (has && np.art) npImg.src = '/media/art?v=' + Date.now(); else npImg.removeAttribute('src');
     }
@@ -553,12 +590,12 @@
   }
 
   // ---- sleep timer: the PC owns the countdown (it keeps running if the phone drops); the phone paints it between answers
-  let sl = null;   // { end (performance.now() ms), total (s), episode } while a timer runs
+  let sl = null;   // { end (performance.now() ms), total (s) } while a timer runs
   const fmtLeft = (s) => (s >= 3600 ? Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') : fmtT(s));
   function gotSleep(m) {
-    if (m.err) toast(m.err === 'no-episode' ? 'Nothing with a known length is playing' : 'Pick a time', { bad: true });
+    if (m.err) toast('Pick a time', { bad: true });
     const was = !!sl;
-    sl = m.on ? { end: performance.now() + m.left * 1000, total: Math.max(1, m.total), episode: !!m.episode } : null;
+    sl = m.on ? { end: performance.now() + m.left * 1000, total: Math.max(1, m.total) } : null;
     if (was !== !!sl && page === 'media') startMedia();   // repaint at the pace the new state needs
     paintSleep();
   }
@@ -567,14 +604,14 @@
     if (!sl) return;
     const left = Math.max(0, (sl.end - performance.now()) / 1000);
     $('#sl-left').textContent = fmtLeft(Math.ceil(left));
-    $('#sl-what').textContent = left <= 0 ? 'Going to sleep...' : sl.episode ? 'Sleeps when the episode ends' : 'Then the PC goes to sleep';
+    $('#sl-what').textContent = left <= 0 ? 'Going to sleep...' : 'Then the PC goes to sleep';
     $('#sl-fill').style.setProperty('--v', Math.min(1, left / sl.total).toFixed(4));
   }
   $$('[data-sleep]').forEach((b) => {
     b.onclick = () => {
       if (!online) { toast('Not connected', { bad: true }); return; }
       const v = b.dataset.sleep;
-      send(v === 'episode' ? { t: 'sleep.set', episode: true } : { t: 'sleep.set', secs: +v });
+      send({ t: 'sleep.set', secs: +v });
       buzz();
     };
   });
@@ -704,12 +741,23 @@
     };
   });
 
+  // ---- monitor: both screens, or the main one only
+  const DISPLAY_NOTE = { dual: 'Using both monitors', main: 'Main monitor only' };
+  $$('[data-display]').forEach((b) => {
+    b.onclick = () => {
+      const m = b.dataset.display;
+      send({ t: 'display', m });
+      toast(DISPLAY_NOTE[m], { icon: 'monitor' }); buzz(); closeSheet();
+    };
+  });
+
   // ============================================================ bottom sheet
   // A native <dialog class="sheet">: the kit (kit/ui.js) handles the backdrop tap and the drag-down dismiss.
   const sheet = $('#sheet');
-  const TITLES = { more: 'More', browser: 'Browser', keys: 'Special keys', clip: 'Clipboard', power: 'Power', settings: 'Settings' };
+  const TITLES = { more: 'More', browser: 'Browser', keys: 'Special keys', clip: 'Clipboard', monitor: 'Monitor', power: 'Power', settings: 'Settings' };
   let sheetOpen = false, stack = ['more'];
-  function showView(id) {
+  function showView(id, back = false) {
+    sheet.classList.toggle('back', back);   // going back slides the other way
     $$('.sh-view').forEach((v) => v.classList.toggle('on', v.id === 'v-' + id));
     $('#sh-title').textContent = TITLES[id]; sheet.classList.toggle('deep', stack.length > 1);
     sheet.scrollTop = 0;
@@ -721,7 +769,7 @@
   function closeSheet() { if (sheet.open) sheet.close(); }
   sheet.addEventListener('close', () => { sheetOpen = false; paintNav(); });   // also fires for Escape, backdrop tap and drag-down
   $$('[data-view]').forEach((t) => { t.onclick = () => { stack.push(t.dataset.view); showView(t.dataset.view); }; });
-  $('#sh-back').onclick = () => { if (stack.length > 1) { stack.pop(); showView(stack[stack.length - 1]); } };
+  $('#sh-back').onclick = () => { if (stack.length > 1) { stack.pop(); showView(stack[stack.length - 1], true); } };
   $('#sh-close').onclick = closeSheet;
 
   // ============================================================ pages + bottom nav
@@ -731,10 +779,18 @@
     $$('#nav [data-go]').forEach((b) => b.setAttribute('aria-selected', !sheetOpen && b.dataset.go === page));
     $('#nav [data-more]').setAttribute('aria-selected', sheetOpen);
   }
+  // A tab change is one view transition: old and new page move together, with the header and tab bar named so they stay put.
+  // One at a time: a tap during a running transition applies at once, so transitions never stack into ghosts.
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  let viewMoving = false, started = false;
   function go(name) {
-    const idx = PAGES.indexOf(name);
-    PAGES.forEach((p, i) => { const el = $('#pg-' + p); el.classList.toggle('on', p === name); el.style.setProperty('--off', i < idx ? '-28px' : i > idx ? '28px' : '0px'); });
-    page = name; store.set('or_page', name); paintNav();
+    const swap = () => { PAGES.forEach((p) => $('#pg-' + p).classList.toggle('on', p === name)); page = name; paintNav(); };
+    if (started && name !== page && !viewMoving && !calm.matches && document.startViewTransition) {
+      viewMoving = true;
+      document.documentElement.dataset.nav = 'fade';
+      document.startViewTransition(swap).finished.finally(() => { viewMoving = false; });
+    } else swap();
+    store.set('or_page', name);
     if (name === 'apps') refreshApps();
     if (name === 'media') startMedia(); else stopMedia();
   }
@@ -744,7 +800,8 @@
   // ============================================================ start
   applyTheme();   // theme.js ran in the head, before the settings buttons existed: mark the chosen flavor, accent and radius
   paintSettings(); paintMods();
-  go(page);
+  go(page); started = true;
+  if (winLoaded) renderWins();   // the last windows and apps are on screen at once, before the PC answers
   boot();
   if (!store.get('or_seen_hint', false) && page === 'pad') setTimeout(showCoach, 700);
 })();

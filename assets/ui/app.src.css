@@ -21,18 +21,27 @@
   .dot.wait { @apply bg-yellow; }
   .dot.wait::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--ctp-yellow); animation: ping 1.3s var(--ease) infinite; }
 
-  #stage { position: relative; min-height: 0; flex: 1; }
+  #stage { position: relative; min-height: 0; flex: 1; overflow: hidden; }   /* pages parked off to the side must not make the app scroll sideways */
   .page {
     position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: 4px 16px 10px;
     overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
-    opacity: 0; visibility: hidden; transform: translateX(var(--off, 0px));
-    transition: opacity 0.26s var(--ease), transform 0.26s var(--ease), visibility 0s linear 0.26s;
+    visibility: hidden;
   }
   .page::-webkit-scrollbar { display: none; }
-  .page.on { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+  .page.on { visibility: visible; }
+  /* Buttons and chips transition "all", which includes the visibility they inherit: a leaving page's buttons would linger ~200 ms
+     and ghost onto the next page. A hidden page's contents never transition, so they are gone the moment the page is. */
+  .page:not(.on) * { transition-duration: 0s !important; }
+  /* Every tab change is one view transition (the page itself moves; nothing else animates it, or it fades twice).
+     The header and the tab bar have their own names, so they stay put instead of ghosting with the page. */
+  /* No cross-fade: the old page's buttons would show through the new page's at other positions. The old page goes at once, the new fades in. */
+  html[data-nav="fade"]::view-transition-old(root) { animation: none; opacity: 0; }
+  html[data-nav="fade"]::view-transition-new(root) { animation: fade 0.2s var(--ease) both; }
+  #top { view-transition-name: app-header; }
+  #nav { view-transition-name: app-bar; }
 
   #nav { flex: none; padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
-  #nav .tab { @apply min-h-11 flex-1 justify-center; }
+  #nav .tab { @apply min-h-11 min-w-0 flex-1 justify-center; }   /* five tabs must fit a 320 px phone */
 
   /* ---- small helpers ---- */
   .glabel { @apply mt-5 mb-2 px-1 text-xs font-semibold tracking-wider text-subtext0 uppercase; }
@@ -44,6 +53,9 @@
   .chips::-webkit-scrollbar { display: none; }
   .chips .chip { flex: none; height: 40px; padding-inline: 16px; }
   .chips .chip:active { @apply bg-accent text-crust; }
+  .chips .chip[data-mod] svg { opacity: 0.55; }   /* the pin: this key waits for the next one, instead of pressing now */
+  .chips .chip[data-mod][aria-pressed="true"] svg { opacity: 1; }
+  .modhint { margin: 0; padding: 0 4px; }
   .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 
   /* ---- touchpad ---- */
@@ -98,6 +110,7 @@
   .keypop { @apply pointer-events-none absolute z-[6] grid h-[60px] w-[54px] place-items-center rounded-card bg-surface1 font-medium shadow-[var(--shadow-2)]; font-size: 28px; opacity: 0; transform: translate(-50%, -100%) scale(0.9); transition: opacity 0.15s var(--ease), transform 0.15s var(--ease); }
   .keypop.show { opacity: 1; transform: translate(-50%, calc(-100% - 8px)) scale(1); }
   .keys2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 350px) { .keys2 { grid-template-columns: 1fr; } }   /* four keys per half no longer fit "Home" */
   .keys2 .kr { margin-bottom: 6px; }
   .keys2 .key { @apply h-[46px] bg-surface0 font-semibold; font-size: 13px; }
   .keys2 .key.fn { @apply bg-surface1; }
@@ -118,16 +131,24 @@
   .wcard .ti { min-width: 0; flex: 1; }
   .wcard .ti b { @apply block truncate font-semibold; font-size: 16px; }
   .wcard .ti small { @apply flex items-center gap-2 text-subtext0; font-size: 13px; }
-  .wcard .tag { @apply rounded-full bg-accent/15 px-2 text-xs font-semibold text-accent; display: none; }
+  .wcard .ti small > span:first-child { @apply truncate; min-width: 0; }   /* a long exe name ends in an ellipsis, it never pushes the tag over the buttons */
+  .wcard .tag { @apply rounded-full bg-accent/15 px-2 text-xs font-semibold text-accent; display: none; flex: none; white-space: nowrap; }
   .wcard.fg .tag { display: inline; }
   .wcard .acts { display: flex; flex: none; gap: 6px; }
   .wcard .acts .btn { width: 36px; height: 36px; }
   .wcard .acts .btn.danger { @apply text-red; }
   .aic { position: relative; display: grid; flex: none; width: 44px; height: 44px; place-items: center; overflow: hidden; border-radius: var(--r-ctl); }
   .aic .fb { @apply size-6 text-overlay1; }
-  .aic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.2s; padding: 4px; }
-  .aic img.ld { opacity: 1; }
+  .aic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 4px; transition: opacity 0.3s var(--ease); }
+  /* An icon still loading after a moment shimmers, then fades in; a cached one just shows. The placeholder glyph is only for
+     a window or app with no icon (or one that failed), never behind a real icon, where it would show through. */
+  .aic:has(> img) .fb { visibility: hidden; }
+  .aic img.pending { opacity: 0; }
+  .aic:has(> img.pending)::after { content: ""; position: absolute; inset: 0; pointer-events: none; transform: translateX(-100%); animation: shimmer 1.4s infinite;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ctp-text) 9%, transparent), transparent); }
   .aic.fail { @apply bg-surface0; }
+  .aic.fail .fb { visibility: visible; }
+  .aic.fail img { visibility: hidden; }
   .sec { @apply mt-4 mb-2 px-1 text-xs font-semibold tracking-wider text-subtext0; }
   .agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 6px 4px; }
   .hrow { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
@@ -151,20 +172,23 @@
   .np-meta span { @apply truncate text-subtext1; font-size: 15px; }
   .np-meta small { @apply truncate text-subtext0; font-size: 13px; }
   #np.idle .np-meta b { @apply text-subtext1; }
+  .np-top.swap .np-meta, .np-top.swap .np-art { animation: fade 0.26s var(--ease) both; }   /* a new track */
+  .np-art img:not([hidden]) { animation: fade 0.2s var(--ease) both; }   /* the cover, once it has loaded */
+  #pp.flip svg { animation: pop 0.26s var(--ease) both; }   /* play <-> pause */
   .np-prog { @apply mt-4 flex items-center gap-2.5 text-xs text-subtext0 tabular-nums; }
   .np-prog .bar { flex: 1; }
   .np-prog .bar > i { transition-duration: 0.5s; transition-timing-function: linear; }   /* follows playback time */
   .transport { @apply mt-3 flex items-center justify-center gap-6; }
   .transport .big { width: 64px; height: 64px; padding: 0; border-radius: 9999px; }
   .volrow { @apply grid grid-cols-3 gap-2.5; }
-  .sleepgrid { @apply grid grid-cols-3 gap-2; }
-  .sleepgrid .chip { height: 44px; justify-content: center; padding-inline: 8px; }
-  .sleepgrid .chip:last-child { grid-column: 1 / -1; }
+  .sleepgrid { @apply grid grid-cols-3 gap-2.5; }   /* same gap and corner radius as the volume buttons above */
+  .sleepgrid .chip { @apply rounded-ctl; height: 44px; justify-content: center; padding-inline: 8px; }
   .sl-top { @apply mb-3.5 flex items-center justify-between gap-3; }
   .sl-meta { @apply flex min-w-0 flex-col; }
   .sl-meta b { @apply text-xl font-semibold tabular-nums; }
   .sl-meta small { @apply text-subtext0; font-size: 13px; }
   .sl-run .bar > i { transition-duration: 0.25s; transition-timing-function: linear; }   /* follows the countdown */
+  #sl-pick:not([hidden]), #sl-run:not([hidden]) { animation: rise 0.26s var(--ease) both; }   /* the picker and the countdown swap places */
   .vbtn { @apply flex h-16 flex-col gap-0.5; font-size: 13px; }
 
   /* ---- sheet ---- */
@@ -175,6 +199,7 @@
   #sheet .sh-body { padding: 4px 16px 24px; }
   #sheet .sh-view { display: none; }
   #sheet .sh-view.on { display: block; animation: viewin 0.26s var(--ease) both; }
+  #sheet.back .sh-view.on { animation-name: viewback; }
   #sheet .row { @apply w-full text-left; }
   #sheet .row small { @apply block text-subtext0; font-size: 13px; }
   #sheet .row.arm { background: color-mix(in srgb, var(--ctp-red) 14%, transparent); }
@@ -198,9 +223,17 @@
 
   #sysin { position: fixed; left: -1000px; top: 0; width: 10px; height: 10px; opacity: 0; }
 
+  /* ---- splash: shown from the first paint until the PC answers ---- */
+  #splash { @apply fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-base; transition: opacity 0.26s var(--ease); }
+  #splash.gone { opacity: 0; pointer-events: none; }
+  #splash .tile { @apply grid size-24 place-items-center rounded-sheet text-crust shadow-[var(--shadow-3)]; background: linear-gradient(135deg, var(--ctp-blue), var(--ctp-mauve)); animation: pop 0.5s var(--ease) both; }
+  #splash b { @apply text-xl font-semibold; }
+  #splash .bar { width: 96px; }
+
   /* ---- toast ---- */
   #toast { @apply pointer-events-none fixed left-1/2 z-[60] max-w-[calc(100vw-32px)]; top: calc(env(safe-area-inset-top) + 12px); animation: none; opacity: 0; transform: translate(-50%, -140%); transition: transform 0.4s var(--ease), opacity 0.2s; }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.swap > * { animation: fade 0.2s var(--ease) both; }
   #toast svg { @apply text-blue; }
   #toast.bad svg { @apply text-red; }
 }
@@ -208,6 +241,7 @@
 @keyframes ping { from { transform: scale(1); opacity: 0.6; } to { transform: scale(3.4); opacity: 0; } }
 @keyframes ripple { from { transform: scale(1); opacity: 0.65; } to { transform: scale(9); opacity: 0; } }
 @keyframes viewin { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+@keyframes viewback { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
 
 /* ---- landscape phones: navigation becomes a side rail ---- */
 @media (orientation: landscape) and (max-height: 520px) {
