@@ -23,6 +23,37 @@ const SW_JS: &str = include_str!("../assets/sw.js");
 const ICON_180: &[u8] = include_bytes!("../assets/icon-180.png");
 const ICON_192: &[u8] = include_bytes!("../assets/icon-192.png");
 const ICON_512: &[u8] = include_bytes!("../assets/icon-512.png");
+
+/// iPhone launch images (made by `tools/gen_splash.py`; the page's head names them), looked up by file name without `.png`.
+macro_rules! splash {
+    ($($n:literal),* $(,)?) => { &[$(($n, include_bytes!(concat!("../assets/splash/", $n, ".png")))),*] };
+}
+const SPLASH: &[(&str, &[u8])] = splash!(
+    "dark-1320x2868",
+    "light-1320x2868",
+    "dark-1206x2622",
+    "light-1206x2622",
+    "dark-1290x2796",
+    "light-1290x2796",
+    "dark-1179x2556",
+    "light-1179x2556",
+    "dark-1284x2778",
+    "light-1284x2778",
+    "dark-1170x2532",
+    "light-1170x2532",
+    "dark-1125x2436",
+    "light-1125x2436",
+    "dark-1242x2688",
+    "light-1242x2688",
+    "dark-828x1792",
+    "light-828x1792",
+    "dark-1242x2208",
+    "light-1242x2208",
+    "dark-750x1334",
+    "light-750x1334",
+    "dark-640x1136",
+    "light-640x1136",
+);
 const MAX_WS_MESSAGE: usize = 512 * 1024;
 
 pub struct AppState<I: Injector> {
@@ -47,6 +78,7 @@ pub fn router<I: Injector + 'static>(state: Arc<AppState<I>>) -> Router {
         .route("/icon-180.png", get(|| async { png(ICON_180) }))
         .route("/icon-192.png", get(|| async { png(ICON_192) }))
         .route("/icon-512.png", get(|| async { png(ICON_512) }))
+        .route("/splash/{file}", get(splash_image))
         .merge(crate::pairroutes::routes::<AppState<I>>())
         .merge(crate::admin::routes::<AppState<I>>())
         .layer(middleware::from_fn_with_state(state.clone(), guard::<I>))
@@ -110,6 +142,7 @@ impl<I: Injector + 'static> crate::admin::AdminHost for AppState<I> {
 /// Pages and routes a phone must be able to reach before it is paired (the page shows the pairing screen).
 fn is_public(path: &str) -> bool {
     matches!(path, "/" | "/manifest.webmanifest" | "/sw.js" | "/icon-180.png" | "/icon-192.png" | "/icon-512.png")
+        || path.starts_with("/splash/")
         || crate::pairroutes::PUBLIC_PATHS.contains(&path)
         || crate::admin::is_admin_path(path) // the dashboard checks for loopback itself
 }
@@ -216,6 +249,14 @@ async fn app_icon<I: Injector + 'static>(State(st): State<Arc<AppState<I>>>, Pat
                 .into_response()
         }
         _ => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// A launch image by name (`/splash/dark-1170x2532.png`); only the embedded ones exist.
+async fn splash_image(Path(file): Path<String>) -> Response {
+    match file.strip_suffix(".png").and_then(|n| SPLASH.iter().find(|(name, _)| *name == n)) {
+        Some((_, bytes)) => png(bytes),
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 

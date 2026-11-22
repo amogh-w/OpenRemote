@@ -360,6 +360,14 @@ async fn pwa_assets_are_served() {
     assert!(sw.contains("or-shell-") && http_get(port, "/sw.js").await == sw, "and the stamp is stable");
     let index = http_get(port, "/").await;
     assert!(index.contains("apple-touch-icon") && index.contains("viewport-fit=cover"));
+    // every launch image the head names is served, and only those
+    let named: Vec<&str> = index.split("href=\"/splash/").skip(1).filter_map(|s| s.split('"').next()).collect();
+    assert_eq!(named.len(), 24, "12 iPhone sizes, dark and light");
+    for file in &named {
+        let r = http_get(port, &format!("/splash/{file}")).await;
+        assert!(r.starts_with("HTTP/1.1 200") && r.to_lowercase().contains("content-type: image/png"), "{file}");
+    }
+    assert!(http_get(port, "/splash/nope.png").await.starts_with("HTTP/1.1 404"));
     // the assembled page: nav, sheet, bundled icons (Lucide attribution), motion preferences
     for needle in [
         "id=\"nav\"",
