@@ -89,6 +89,14 @@
    "a": "shutdown"
   },
   {
+   "t": "display",
+   "m": "dual"
+  },
+  {
+   "t": "display",
+   "m": "main"
+  },
+  {
    "t": "open",
    "url": "https://example.com/"
   },
@@ -140,10 +148,6 @@
   {
    "t": "sleep.set",
    "secs": 600
-  },
-  {
-   "t": "sleep.set",
-   "episode": true
   },
   {
    "t": "sleep.cancel"
@@ -265,8 +269,15 @@
    "secs": 1.5
   },
   {
-   "t": "sleep.set",
-   "episode": "yes"
+   "t": "display",
+   "m": "projector"
+  },
+  {
+   "t": "display"
+  },
+  {
+   "t": "display",
+   "m": "Dual"
   },
   {
    "t": "Ping"

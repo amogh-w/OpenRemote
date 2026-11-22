@@ -22,6 +22,7 @@ fn name(m: &Msg) -> &'static str {
         Msg::Key { .. } => "key",
         Msg::Text { .. } => "text",
         Msg::Power { .. } => "power",
+        Msg::Display { .. } => "display",
         Msg::Open { .. } => "open",
         Msg::ClipSet { .. } => "clip.set",
         Msg::ClipGet => "clip.get",
@@ -38,13 +39,14 @@ fn name(m: &Msg) -> &'static str {
 }
 
 /// Keep in step with `name()` above.
-const ALL: [&str; 18] = [
+const ALL: [&str; 19] = [
     "move",
     "btn",
     "scroll",
     "key",
     "text",
     "power",
+    "display",
     "open",
     "clip.set",
     "clip.get",

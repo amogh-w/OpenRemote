@@ -123,6 +123,7 @@ mod imp {
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::mem::{size_of, zeroed};
+    use std::os::windows::io::AsRawHandle;
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
     use std::ptr::{null, null_mut};
@@ -145,8 +146,8 @@ mod imp {
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
     };
     use windows_sys::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
-        PIPE_TYPE_BYTE, PIPE_WAIT,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, SetNamedPipeHandleState, PIPE_NOWAIT,
+        PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows_sys::Win32::System::RemoteDesktop::{
         ProcessIdToSessionId, WTSGetActiveConsoleSessionId, WTSQueryUserToken,
@@ -176,24 +177,46 @@ mod imp {
 
     /// Forwards input events to the helper. Reconnects at most once a second, so having no helper costs
     /// one failed `open` per second and nothing per event.
-    pub struct HelperLink(Mutex<LinkState>);
+    pub struct HelperLink {
+        pipe_name: String,
+        state: Mutex<LinkState>,
+    }
 
     impl Default for HelperLink {
         fn default() -> Self {
-            Self(Mutex::new(LinkState { pipe: None, next_try: Instant::now() }))
+            Self::with_pipe(PIPE_NAME)
+        }
+    }
+
+    /// Make writes to this pipe return at once. A helper that stops reading would otherwise leave every writer blocked
+    /// behind a full pipe, freezing all phones' input (the pointer smoother holds its lock while it writes). In this mode
+    /// a write to a full pipe fails, the link is dropped and reconnected, and the event is injected locally instead.
+    fn no_wait(pipe: &std::fs::File) {
+        let mode = PIPE_NOWAIT;
+        // SAFETY: `pipe` owns a valid pipe client handle for the whole call, `mode` outlives it and the two optional
+        // arguments may be null.
+        unsafe {
+            SetNamedPipeHandleState(pipe.as_raw_handle() as HANDLE, &mode, null(), null());
         }
     }
 
     impl HelperLink {
+        pub(super) fn with_pipe(name: &str) -> Self {
+            Self { pipe_name: name.to_string(), state: Mutex::new(LinkState { pipe: None, next_try: Instant::now() }) }
+        }
+
         /// True when the event reached the helper, false when the caller should inject it itself.
         pub fn send(&self, ev: Event) -> bool {
-            let mut st = self.0.lock().unwrap_or_else(|e| e.into_inner());
+            let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
             if st.pipe.is_none() {
                 if Instant::now() < st.next_try {
                     return false;
                 }
                 st.next_try = Instant::now() + Duration::from_secs(1);
-                st.pipe = OpenOptions::new().write(true).open(PIPE_NAME).ok();
+                st.pipe = OpenOptions::new().write(true).open(&self.pipe_name).ok();
+                if let Some(f) = &st.pipe {
+                    no_wait(f);
+                }
             }
             let Some(f) = st.pipe.as_mut() else { return false };
             if f.write_all(&ev.encode()).is_ok() {
@@ -697,6 +720,55 @@ To continue, run it again with --yes. To remove it later: openremote --uninstall
             return Some(report(result, true));
         }
         None
+    }
+}
+
+#[cfg(all(test, windows))]
+mod link_tests {
+    use super::imp::HelperLink;
+    use super::{Event, FRAME};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::Storage::FileSystem::PIPE_ACCESS_INBOUND;
+    use windows_sys::Win32::System::Pipes::{CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT};
+
+    /// A pipe server that accepts the link and then never reads, like a hung helper. Uses its own pipe name.
+    fn silent_server(name: &str) {
+        let wide: Vec<u16> = name.encode_utf16().chain([0]).collect();
+        // SAFETY: `wide` is NUL-terminated; the handle is deliberately kept open for the rest of the test process.
+        let h = unsafe {
+            CreateNamedPipeW(
+                wide.as_ptr(),
+                PIPE_ACCESS_INBOUND,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                1,
+                512,
+                512,
+                0,
+                std::ptr::null(),
+            )
+        };
+        assert_ne!(h, INVALID_HANDLE_VALUE, "test pipe");
+    }
+
+    #[test]
+    fn a_helper_that_stops_reading_cannot_block_the_writer() {
+        let name = format!(r"\\.\pipe\openremote-test-{}", std::process::id());
+        silent_server(&name);
+        let link = HelperLink::with_pipe(&name);
+        assert!(link.send(Event::Ping), "the first frame fits in the pipe");
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            // far more than the 512-byte pipe holds: a blocking write would hang right here
+            let mut failed = false;
+            for _ in 0..(4096 / FRAME) {
+                failed |= !link.send(Event::Move { dx: 1, dy: 1 });
+            }
+            let _ = tx.send(failed);
+        });
+        let failed = rx.recv_timeout(Duration::from_secs(5)).expect("send must not block on a full pipe");
+        assert!(failed, "once the pipe is full, events are handed back to be injected locally");
     }
 }
 

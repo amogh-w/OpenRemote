@@ -3,7 +3,8 @@
 use crate::sleeptimer::{self, Media, SleepTimer};
 use crate::smooth::Smoother;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::collections::BTreeSet;
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -41,6 +42,16 @@ pub enum PowerAct {
     Logoff,
     Restart,
     Shutdown,
+}
+
+/// How the monitors are used. The two modes of the desktop shortcuts: both screens, or the main one alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DisplayMode {
+    /// Extend the desktop across both monitors.
+    Dual,
+    /// The main monitor only.
+    Main,
 }
 
 /// What a client may do to an open window.
@@ -111,6 +122,10 @@ pub enum Msg {
     Power {
         a: PowerAct,
     },
+    /// Switch between both monitors and the main one only.
+    Display {
+        m: DisplayMode,
+    },
     /// Open an http(s) URL in the PC's default browser.
     Open {
         url: String,
@@ -141,14 +156,11 @@ pub enum Msg {
     /// Ask what is playing; answered with `{"t":"media",...}` (see [`MediaInfo`]).
     #[serde(rename = "media.get")]
     MediaGet,
-    /// Put the PC to sleep after `secs` seconds, or when the current episode ends (`episode`). Replaces a running
-    /// timer; answered with `{"t":"sleep",...}`.
+    /// Put the PC to sleep after `secs` seconds. Replaces a running timer; answered with `{"t":"sleep",...}`.
     #[serde(rename = "sleep.set")]
     SleepSet {
         #[serde(default)]
         secs: u64,
-        #[serde(default)]
-        episode: bool,
     },
     /// Cancel the sleep timer; answered with `{"t":"sleep","on":false}`.
     #[serde(rename = "sleep.cancel")]
@@ -157,6 +169,14 @@ pub enum Msg {
     #[serde(rename = "sleep.get")]
     SleepGet,
     Ping,
+}
+
+impl Msg {
+    /// Messages that wait on Windows (the media session, the clipboard, a window or Start Menu scan). The server runs
+    /// these on a blocking thread so they cannot hold up the async workers; the rest are quick and run inline.
+    pub fn is_blocking(&self) -> bool {
+        matches!(self, Msg::ClipGet | Msg::ClipSet { .. } | Msg::MediaGet | Msg::WinList | Msg::AppList)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -195,6 +215,7 @@ pub trait Injector: Send + Sync {
         false
     }
     fn power(&self, _act: PowerAct) {}
+    fn display(&self, _mode: DisplayMode) {}
     fn open_url(&self, _url: &str) {}
     fn clip_get(&self) -> Option<String> {
         None
@@ -248,9 +269,9 @@ struct PcHost<I> {
 }
 
 impl<I: Injector + 'static> sleeptimer::Host for PcHost<I> {
+    /// Only an end-of-episode timer asks what is playing, and OpenRemote has none (Kai Remote does).
     fn media(&self) -> Option<Media> {
-        let m = self.inj.media().filter(|m| m.dur > 0 && m.state != MediaState::Stopped)?;
-        Some(Media { pos: m.pos as f64, dur: m.dur as f64, title: m.title })
+        None
     }
     fn suspend(&self) {
         self.inj.power(PowerAct::Sleep);
@@ -260,6 +281,14 @@ impl<I: Injector + 'static> sleeptimer::Host for PcHost<I> {
     }
 }
 
+/// What a phone has pressed and not yet let go of (a drag, a held modifier).
+#[derive(Default)]
+struct Held {
+    /// Left, right, middle.
+    buttons: [bool; 3],
+    keys: BTreeSet<u8>,
+}
+
 pub struct Dispatcher<I: Injector> {
     inj: Arc<I>,
     /// Paces pointer movement (see `smooth.rs`); `None` injects every move the moment it arrives.
@@ -267,9 +296,15 @@ pub struct Dispatcher<I: Injector> {
     sleep: SleepTimer,
     /// Messages for every connected phone (the sleep timer ending, or changed from another phone).
     events: broadcast::Sender<String>,
+    held: Mutex<Held>,
 }
 
 impl<I: Injector + 'static> Dispatcher<I> {
+    /// Moves are injected as they arrive.
+    pub fn new(inj: I) -> Self {
+        Self::with_smoothing(inj, 0)
+    }
+
     /// Pointer moves are paced by a `Smoother` with time constant `tau_ms` (0 turns smoothing off).
     pub fn with_smoothing(inj: I, tau_ms: u32) -> Self {
         let inj = Arc::new(inj);
@@ -281,17 +316,7 @@ impl<I: Injector + 'static> Dispatcher<I> {
         });
         let events = broadcast::channel(16).0;
         let sleep = SleepTimer::new(PcHost { inj: Arc::clone(&inj), events: events.clone() });
-        Self { inj, smooth, sleep, events }
-    }
-}
-
-impl<I: Injector + 'static> Dispatcher<I> {
-    /// Moves are injected as they arrive.
-    pub fn new(inj: I) -> Self {
-        let inj = Arc::new(inj);
-        let events = broadcast::channel(16).0;
-        let sleep = SleepTimer::new(PcHost { inj: Arc::clone(&inj), events: events.clone() });
-        Self { inj, smooth: None, sleep, events }
+        Self { inj, smooth, sleep, events, held: Mutex::default() }
     }
 
     /// Tell every connected phone, so they all show the same timer; the caller also answers its own phone.
@@ -303,6 +328,25 @@ impl<I: Injector + 'static> Dispatcher<I> {
     /// Messages meant for all phones; each connection subscribes for its lifetime.
     pub fn subscribe(&self) -> broadcast::Receiver<String> {
         self.events.subscribe()
+    }
+
+    fn held(&self) -> std::sync::MutexGuard<'_, Held> {
+        self.held.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Let go of everything a phone left held. The server calls this when a connection ends, so a Wi-Fi drop in the
+    /// middle of a drag cannot leave a mouse button or a modifier stuck down on the PC.
+    pub fn release_all(&self) {
+        let held = std::mem::take(&mut *self.held());
+        self.settle();
+        for (down, b) in held.buttons.into_iter().zip([Button::Left, Button::Right, Button::Middle]) {
+            if down {
+                self.inj.button(b, false);
+            }
+        }
+        for vk in held.keys {
+            self.inj.key(vk, false);
+        }
     }
 
     /// Release everything the smoother still holds, so a click or scroll happens where the finger stopped.
@@ -334,8 +378,8 @@ impl<I: Injector + 'static> Dispatcher<I> {
                     None => serde_json::json!({"t": "media", "state": "none"}),
                 });
             }
-            &Msg::SleepSet { secs, episode } => {
-                return Some(self.share(self.sleep.set((secs > 0).then_some(secs), episode)));
+            &Msg::SleepSet { secs } => {
+                return Some(self.share(self.sleep.set(Some(secs), false)));
             }
             Msg::SleepCancel => return Some(self.share(self.sleep.cancel())),
             Msg::SleepGet => return Some(self.sleep.get()),
@@ -353,9 +397,16 @@ impl<I: Injector + 'static> Dispatcher<I> {
             }
             Msg::Btn { b, s } => {
                 self.settle();
+                let idx = *b as usize;
                 match s {
-                    BtnAct::Down => self.inj.button(*b, true),
-                    BtnAct::Up => self.inj.button(*b, false),
+                    BtnAct::Down => {
+                        self.held().buttons[idx] = true;
+                        self.inj.button(*b, true)
+                    }
+                    BtnAct::Up => {
+                        self.held().buttons[idx] = false;
+                        self.inj.button(*b, false)
+                    }
                     BtnAct::Click => self.click(*b),
                     BtnAct::Dbl => {
                         self.click(*b);
@@ -375,6 +426,7 @@ impl<I: Injector + 'static> Dispatcher<I> {
             Msg::Key { k, s } => self.key(k, *s),
             Msg::Text { v } => v.encode_utf16().take(MAX_TEXT_UNITS).for_each(|u| self.inj.type_unit(u)),
             Msg::Power { a } => self.inj.power(*a),
+            Msg::Display { m } => self.inj.display(*m),
             Msg::Open { url } => {
                 if is_safe_url(url) {
                     self.inj.open_url(url);
@@ -449,6 +501,11 @@ impl<I: Injector + 'static> Dispatcher<I> {
         }
         if act != KeyAct::Down {
             vks.iter().rev().for_each(|&v| self.inj.key(v, false));
+        }
+        match act {
+            KeyAct::Down => self.held().keys.extend(&vks),
+            KeyAct::Up => self.held().keys.retain(|k| !vks.contains(k)),
+            KeyAct::Press => {}
         }
     }
 }
@@ -566,6 +623,9 @@ pub mod testing {
         fn power(&self, a: PowerAct) {
             self.0.lock().unwrap().push(format!("power {a:?}"));
         }
+        fn display(&self, m: DisplayMode) {
+            self.0.lock().unwrap().push(format!("display {m:?}"));
+        }
         fn open_url(&self, u: &str) {
             self.0.lock().unwrap().push(format!("open {u}"));
         }
@@ -674,6 +734,56 @@ mod tests {
         assert_eq!(total(&log[..click]), (40, 0), "{log:?}");
         std::thread::sleep(std::time::Duration::from_millis(60));
         assert_eq!(total(&rec.take()), (0, 0), "nothing should trail the click");
+    }
+
+    #[test]
+    fn a_dropped_phone_cannot_leave_a_button_or_key_held() {
+        let rec = Arc::new(Rec::default());
+        let d = Dispatcher::new(rec.clone());
+        let send = |j: &str| {
+            d.handle(&serde_json::from_str(j).unwrap());
+        };
+        send(r#"{"t":"btn","b":"left","s":"down"}"#);
+        send(r#"{"t":"key","k":"shift","s":"down"}"#);
+        send(r#"{"t":"key","k":"ctrl","s":"down"}"#);
+        send(r#"{"t":"key","k":"ctrl","s":"up"}"#); // let go properly: not released again
+        send(r#"{"t":"btn","b":"right","s":"click"}"#); // a click is not held
+        rec.take();
+        d.release_all();
+        assert_eq!(rec.take(), ["btn Left false", "key 16 false"]);
+        d.release_all();
+        assert!(rec.take().is_empty(), "nothing is left to release");
+        send(r#"{"t":"btn","b":"middle","s":"down"}"#);
+        send(r#"{"t":"btn","b":"middle","s":"up"}"#);
+        rec.take();
+        d.release_all();
+        assert!(rec.take().is_empty(), "a button the phone released is not released twice");
+    }
+
+    #[test]
+    fn only_slow_messages_go_to_the_blocking_pool() {
+        for j in [r#"{"t":"clip.get"}"#, r#"{"t":"media.get"}"#, r#"{"t":"win.list"}"#, r#"{"t":"app.list"}"#] {
+            assert!(serde_json::from_str::<Msg>(j).unwrap().is_blocking(), "{j}");
+        }
+        for j in [
+            r#"{"t":"move","dx":1,"dy":1}"#,
+            r#"{"t":"btn","b":"left","s":"down"}"#,
+            r#"{"t":"key","k":"a"}"#,
+            r#"{"t":"ping"}"#,
+            r#"{"t":"sleep.get"}"#,
+            r#"{"t":"sleep.set","secs":5}"#,
+        ] {
+            assert!(!serde_json::from_str::<Msg>(j).unwrap().is_blocking(), "{j}");
+        }
+    }
+
+    #[test]
+    fn display_modes_reach_the_backend_and_nothing_else_does() {
+        assert_eq!(run(r#"{"t":"display","m":"dual"}"#), ["display Dual"]);
+        assert_eq!(run(r#"{"t":"display","m":"main"}"#), ["display Main"]);
+        for bad in [r#"{"t":"display","m":"projector"}"#, r#"{"t":"display"}"#, r#"{"t":"display","m":"/extend"}"#] {
+            assert!(serde_json::from_str::<Msg>(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]
@@ -799,10 +909,7 @@ mod tests {
         let rec = Arc::new(Rec::default());
         let d = Dispatcher::new(rec.clone());
         let r = ask(&d, r#"{"t":"sleep.set","secs":1}"#);
-        assert_eq!(
-            (r["t"].clone(), r["on"].clone(), r["episode"].clone()),
-            ("sleep".into(), true.into(), false.into())
-        );
+        assert_eq!((r["t"].clone(), r["on"].clone()), ("sleep".into(), true.into()));
         assert!(rec.take().is_empty(), "nothing happens before the time is up");
         std::thread::sleep(Duration::from_millis(1600));
         assert_eq!(rec.take(), ["power Sleep"]);
@@ -810,12 +917,10 @@ mod tests {
     }
 
     #[test]
-    fn sleep_timer_follows_the_end_of_the_episode_and_keeps_the_timer_on_a_bad_request() {
+    fn sleep_timer_keeps_the_timer_on_a_bad_request_and_clamps_the_time() {
         let d = Dispatcher::new(Arc::new(Rec::default()));
-        // the mock plays a 200 s item at 12 s: 188 s left plus the 2 s grace
-        let r = ask(&d, r#"{"t":"sleep.set","episode":true}"#);
-        assert_eq!((r["on"].clone(), r["episode"].clone()), (true.into(), true.into()));
-        assert!((r["total"].as_f64().unwrap() - 190.0).abs() < 1.0);
+        let r = ask(&d, r#"{"t":"sleep.set","secs":600}"#);
+        assert_eq!((r["on"].clone(), r["total"].as_f64()), (true.into(), Some(600.0)));
         let r = ask(&d, r#"{"t":"sleep.set"}"#);
         assert_eq!((r["err"].clone(), r["on"].clone()), ("bad-time".into(), true.into()));
         assert_eq!(ask(&d, r#"{"t":"sleep.set","secs":99999999}"#)["total"], (12 * 3600) as f64);

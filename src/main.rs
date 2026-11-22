@@ -167,8 +167,7 @@ fn bind(rt: &tokio::runtime::Runtime, port: u16, patient: bool) -> std::io::Resu
     loop {
         match rt.block_on(TcpListener::bind(("0.0.0.0", port))) {
             Ok(l) => return Ok(l),
-            Err(e) if patient && started.elapsed() < std::time::Duration::from_secs(10) => {
-                let _ = e;
+            Err(_) if patient && started.elapsed() < std::time::Duration::from_secs(10) => {
                 std::thread::sleep(std::time::Duration::from_millis(200));
             }
             Err(e) => return Err(e),

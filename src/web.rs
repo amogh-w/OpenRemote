@@ -280,10 +280,10 @@ async fn ws_handler<I: Injector + 'static>(
     ws.max_message_size(MAX_WS_MESSAGE).on_upgrade(move |s| socket_loop(s, st, key))
 }
 
-/// Handle one message. The media query talks to a Windows service and can take a moment, so it runs on a
-/// blocking thread instead of an async worker.
+/// Handle one message. Anything that waits on Windows (media, clipboard, window and app lists, see
+/// `Msg::is_blocking`) runs on a blocking thread instead of an async worker.
 async fn reply_for<I: Injector + 'static>(st: &Arc<AppState<I>>, msg: Msg) -> Option<serde_json::Value> {
-    if matches!(msg, Msg::MediaGet) {
+    if msg.is_blocking() {
         let st2 = st.clone();
         return tokio::task::spawn_blocking(move || st2.dispatcher.handle(&msg)).await.ok().flatten();
     }
@@ -362,6 +362,8 @@ async fn socket_loop<I: Injector + 'static>(mut socket: WebSocket, st: Arc<AppSt
             }
         }
     }
+    // a phone that vanished mid-drag must not leave a button or key held down on the PC
+    st.dispatcher.release_all();
 }
 
 /// Reachable URLs for phones on the LAN.

@@ -43,11 +43,16 @@ pub fn devices_path() -> PathBuf {
 
 impl Settings {
     /// Load settings, creating the file with defaults on first run. Fields from older versions
-    /// (for example a pairing token) are ignored and dropped on the next save.
+    /// (for example a pairing token) are ignored and dropped on the next save. A file that cannot be read is kept as
+    /// `settings.json.bad` before the defaults replace it, so a bad edit or write does not silently reset the port.
     pub fn load_or_create() -> io::Result<Self> {
         if let Ok(text) = fs::read_to_string(path()) {
-            if let Ok(s) = serde_json::from_str::<Settings>(&text) {
-                return Ok(s);
+            match serde_json::from_str::<Settings>(&text) {
+                Ok(s) => return Ok(s),
+                Err(e) => {
+                    crate::pairing::set_aside(&path());
+                    crate::applog::warn(&format!("settings.json is damaged ({e}); kept as settings.json.bad"));
+                }
             }
         }
         let s = Settings { port: DEFAULT_PORT, require_pairing: true };
@@ -60,7 +65,7 @@ impl Settings {
         if let Some(dir) = p.parent() {
             fs::create_dir_all(dir)?;
         }
-        fs::write(p, serde_json::to_string_pretty(self).map_err(io::Error::other)?)
+        crate::pairing::write_atomic(&p, &serde_json::to_string_pretty(self).map_err(io::Error::other)?)
     }
 }
 

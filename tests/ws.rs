@@ -1,7 +1,7 @@
 //! End-to-end tests: real axum server on an ephemeral port, real WebSocket client, mock injector.
 
 use futures_util::{SinkExt, StreamExt};
-use openremote::command::{AppEntry, Button, Dispatcher, Injector, WindowAct, WindowInfo};
+use openremote::command::{AppEntry, Button, Dispatcher, DisplayMode, Injector, WindowAct, WindowInfo};
 use openremote::web::{self, AppState};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -19,6 +19,9 @@ struct Handle(Arc<Rec>);
 impl Injector for Handle {
     fn move_rel(&self, dx: i32, dy: i32) {
         self.0 .0.lock().unwrap().push(format!("move {dx} {dy}"));
+    }
+    fn display(&self, m: DisplayMode) {
+        self.0 .0.lock().unwrap().push(format!("display {m:?}"));
     }
     fn button(&self, b: Button, down: bool) {
         self.0 .0.lock().unwrap().push(format!("btn {b:?} {down}"));
@@ -209,6 +212,29 @@ async fn client_drives_input() {
             "type 97",
         ]
     );
+}
+
+#[tokio::test]
+async fn a_connection_that_ends_mid_drag_releases_what_it_held() {
+    let (port, rec) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
+    ws.next().await.unwrap().unwrap(); // hello
+    ws.send(Message::Text(r#"{"t":"btn","b":"left","s":"down"}"#.into())).await.unwrap();
+    ws.send(Message::Text(r#"{"t":"key","k":"shift","s":"down"}"#.into())).await.unwrap();
+    assert_eq!(wait_for(&rec, 2).await, ["btn Left true", "key 16 true"]);
+    drop(ws); // the phone leaves without letting go
+    assert_eq!(wait_for(&rec, 4).await, ["btn Left true", "key 16 true", "btn Left false", "key 16 false"]);
+}
+
+#[tokio::test]
+async fn display_modes_arrive_over_the_socket() {
+    let (port, rec) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws")).await.unwrap();
+    ws.next().await.unwrap().unwrap(); // hello
+    for m in [r#"{"t":"display","m":"main"}"#, r#"{"t":"display","m":"dual"}"#, r#"{"t":"display","m":"nope"}"#] {
+        ws.send(Message::Text(m.into())).await.unwrap();
+    }
+    assert_eq!(wait_for(&rec, 2).await, ["display Main", "display Dual"]);
 }
 
 #[tokio::test]

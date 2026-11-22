@@ -8,7 +8,7 @@ pub use stub::LogInjector as PlatformInjector;
 
 #[cfg(windows)]
 mod win {
-    use crate::command::{AppEntry, Button, Injector, PowerAct, WindowAct, WindowInfo};
+    use crate::command::{AppEntry, Button, DisplayMode, Injector, PowerAct, WindowAct, WindowInfo};
     use std::mem::size_of;
     use std::os::windows::process::CommandExt;
     use std::process::{Command, Stdio};
@@ -114,6 +114,18 @@ mod win {
         None
     }
 
+    /// Put the PC to sleep (not hibernate). `rundll32 powrprof.dll,SetSuspendState 0,1,0` does not do this: rundll32
+    /// does not parse the argument string, so the first argument is a window handle, which is non-zero, which means
+    /// "hibernate" on a PC that has hibernation. The call returns only after the PC wakes, so it gets its own thread.
+    fn suspend() {
+        std::thread::spawn(|| {
+            // SAFETY: plain FFI call with value arguments: sleep rather than hibernate, forced, wake events on.
+            unsafe {
+                windows_sys::Win32::System::Power::SetSuspendState(0, 1, 0);
+            }
+        });
+    }
+
     /// Fire-and-forget child process with no console window.
     fn spawn_hidden(program: &str, args: &[&str]) {
         let _ = Command::new(program)
@@ -129,11 +141,20 @@ mod win {
         fn power(&self, act: PowerAct) {
             match act {
                 PowerAct::Lock => spawn_hidden("rundll32.exe", &["user32.dll,LockWorkStation"]),
-                PowerAct::Sleep => spawn_hidden("rundll32.exe", &["powrprof.dll,SetSuspendState", "0,1,0"]),
+                PowerAct::Sleep => suspend(),
                 PowerAct::Hibernate => spawn_hidden("shutdown.exe", &["/h"]),
                 PowerAct::Logoff => spawn_hidden("shutdown.exe", &["/l"]),
                 PowerAct::Restart => spawn_hidden("shutdown.exe", &["/r", "/t", "0"]),
                 PowerAct::Shutdown => spawn_hidden("shutdown.exe", &["/s", "/t", "0"]),
+            }
+        }
+
+        /// The two Windows display modes behind the desktop shortcuts: `/extend` (both monitors) and `/external`
+        /// (the second screen only, which on this PC is the main monitor). The client names a mode, never a command.
+        fn display(&self, mode: DisplayMode) {
+            match mode {
+                DisplayMode::Dual => spawn_hidden("DisplaySwitch.exe", &["/extend"]),
+                DisplayMode::Main => spawn_hidden("DisplaySwitch.exe", &["/external"]),
             }
         }
 
